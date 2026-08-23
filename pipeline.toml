@@ -16,7 +16,17 @@ group_key = "lesion_id"
 
 [generator]
 backend = "sd15_lora"
-base_model = "runwayml/stable-diffusion-v1-5"
+# runwayml/stable-diffusion-v1-5 was delisted from HF; this is the maintained mirror.
+base_model = "stable-diffusion-v1-5/stable-diffusion-v1-5"
 resolution = 512
 # Classes with fewer real *training* images than this are generation targets.
 rare_class_max_count = 600
+# Training defaults for full runs; smoke tests override via --opt.
+train_steps = 800
+lr = 1e-4
+batch_size = 2
+grad_accum = 2
+# Sampling defaults.
+sample_count = 100
+sample_steps = 30
+guidance = 7.5

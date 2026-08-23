@@ -39,7 +39,15 @@ def cmd_run_stage(args) -> int:
         )
         return 2
 
-    result = stage_fn(cfg)
+    opts = {}
+    for item in args.opt or []:
+        if "=" not in item:
+            print(f"--opt must be key=value, got {item!r}", file=sys.stderr)
+            return 2
+        key, _, value = item.partition("=")
+        opts[key.strip()] = _coerce(value.strip())
+
+    result = stage_fn(cfg, opts)
     path = write_result(result)
 
     print(f"[stage] {result.stage}: {'PASS' if result.success else 'FAIL'} "
@@ -49,6 +57,15 @@ def cmd_run_stage(args) -> int:
     if args.json:
         print(json.dumps(result.as_dict(), indent=2, sort_keys=True))
     return 0 if result.success else 1
+
+
+def _coerce(value: str):
+    for cast in (int, float):
+        try:
+            return cast(value)
+        except ValueError:
+            continue
+    return value
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -66,6 +83,10 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--config", default=None, help="path to pipeline.toml")
     run_p.add_argument("--data-root", default=None, help="override dataset root")
     run_p.add_argument("--json", action="store_true", help="print the full result JSON")
+    run_p.add_argument(
+        "--opt", action="append", metavar="KEY=VALUE",
+        help="stage option (repeatable), e.g. --opt cls=df --opt steps=40",
+    )
     run_p.set_defaults(func=cmd_run_stage)
 
     return parser

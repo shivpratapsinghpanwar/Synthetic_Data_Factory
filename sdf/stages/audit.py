@@ -46,7 +46,7 @@ def _probe_sizes(records) -> dict[str, int]:
     return dict(sizes)
 
 
-def run(cfg: PipelineConfig) -> StageResult:
+def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     started = time.time()
     try:
         adapter = get_adapter(cfg)

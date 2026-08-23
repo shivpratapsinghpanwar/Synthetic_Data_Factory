@@ -232,6 +232,79 @@ def test_registry_contains_audit():
     assert "audit" in REGISTRY
 
 
+# ------------------------------------------------------- generation plumbing
+def test_prompts_cover_all_seven_classes():
+    from sdf.gen.prompts import CLASS_PROMPTS, prompt_for
+
+    assert sorted(CLASS_PROMPTS) == ["akiec", "bcc", "bkl", "df", "mel", "nv", "vasc"]
+    for cls in CLASS_PROMPTS:
+        assert "dermatoscopy" in prompt_for(cls)
+
+
+def test_prompt_for_unknown_class_raises():
+    from sdf.gen.prompts import PromptError, prompt_for
+
+    try:
+        prompt_for("nope")
+    except PromptError:
+        return
+    raise AssertionError("expected PromptError")
+
+
+def test_cli_opt_coercion():
+    from sdf.cli import _coerce
+
+    assert _coerce("40") == 40
+    assert _coerce("1e-4") == 1e-4
+    assert _coerce("df") == "df"
+
+
+def test_train_lora_requires_cls():
+    from sdf.stages import train_lora
+
+    result = train_lora.run(config.load(), {})
+    assert not result.success
+    assert "cls" in result.error
+
+
+def test_sample_requires_adapter(tmp_path, monkeypatch=None):
+    import os
+
+    from sdf.stages import sample
+
+    os.environ["SDF_OUTPUT_DIR"] = str(tmp_path)
+    try:
+        result = sample.run(config.load(), {"cls": "df"})
+    finally:
+        os.environ.pop("SDF_OUTPUT_DIR", None)
+    assert not result.success
+    assert "adapter" in result.error
+
+
+def test_probe_ml_reports_structured_result():
+    """On the control machine torch is absent - the probe must fail with a
+    structured error naming the missing import, never crash."""
+    from sdf.stages import probe_ml
+
+    result = probe_ml.run(config.load())
+    assert result.stage == "probe_ml"
+    assert isinstance(result.metrics.get("versions"), dict)
+    if result.metrics["versions"].get("torch") is None:
+        assert not result.success
+        assert "torch" in result.error
+
+
+def test_generator_config_validation():
+    cfg = config.load()
+    cfg.generator.train_steps = 0
+    try:
+        config.validate(cfg)
+    except config.ConfigError as exc:
+        assert "train_steps" in str(exc)
+        return
+    raise AssertionError("expected ConfigError")
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect

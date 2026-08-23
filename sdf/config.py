@@ -40,10 +40,19 @@ class SplitConfig:
 @dataclass
 class GeneratorConfig:
     backend: str = "sd15_lora"
-    base_model: str = "runwayml/stable-diffusion-v1-5"
+    base_model: str = "stable-diffusion-v1-5/stable-diffusion-v1-5"
     resolution: int = 512
     # Classes with fewer real training images than this are generation targets.
     rare_class_max_count: int = 600
+    # Training defaults (full runs; smoke tests override via --opt).
+    train_steps: int = 800
+    lr: float = 1e-4
+    batch_size: int = 2
+    grad_accum: int = 2
+    # Sampling defaults.
+    sample_count: int = 100
+    sample_steps: int = 30
+    guidance: float = 7.5
 
 
 @dataclass
@@ -96,6 +105,12 @@ def validate(cfg: PipelineConfig) -> None:
         raise ConfigError("[splits] val_frac + test_frac must be < 0.5")
     if cfg.generator.resolution not in (256, 512):
         raise ConfigError("[generator] resolution must be 256 or 512")
+    g = cfg.generator
+    for name in ("train_steps", "batch_size", "grad_accum", "sample_count", "sample_steps"):
+        if getattr(g, name) <= 0:
+            raise ConfigError(f"[generator] {name} must be positive")
+    if not (0 < g.lr < 1):
+        raise ConfigError("[generator] lr must be in (0, 1)")
     if cfg.dataset.kaggle_slug.count("/") != 1:
         raise ConfigError('[dataset] kaggle_slug must be "owner/dataset-slug"')
     if not cfg.dataset.name:
