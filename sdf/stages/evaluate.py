@@ -1,6 +1,13 @@
 """evaluate stage: score trained detector arms on the real-only test split.
 
-Usage: python -m sdf run-stage evaluate --opt tags=real_only,augmented
+Usage:
+  python -m sdf run-stage evaluate --opt tags=real_only,augmented
+  python -m sdf run-stage evaluate --opt pairs=real_only_s1:augmented_s1,real_only_s2:augmented_s2
+
+`tags` mode: first tag is the baseline, deltas reported against it.
+`pairs` mode (multi-seed): each baseline:treatment pair is one seed; deltas
+are computed within each pair and aggregated as mean +/- sample std across
+pairs - the honest form of the experiment's headline number.
 
 Loads each detector/<tag>/model.pt, predicts on test_index.csv (real images
 only - enforced), and reports per-class + macro metrics per arm. With two or
@@ -23,11 +30,25 @@ from .base import StageResult
 def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     started = time.time()
     opts = opts or {}
-    tags = [t.strip() for t in str(opts.get("tags", "")).split(",") if t.strip()]
+    pairs_raw = str(opts.get("pairs", ""))
+    pairs: list[tuple[str, str]] = []
+    if pairs_raw:
+        for item in pairs_raw.split(","):
+            if ":" not in item:
+                return StageResult(
+                    stage="evaluate", success=False,
+                    error=f"pairs entries must be baseline:treatment, got {item!r}",
+                    duration_s=round(time.time() - started, 2),
+                )
+            base, _, treat = item.partition(":")
+            pairs.append((base.strip(), treat.strip()))
+        tags = sorted({t for pair in pairs for t in pair})
+    else:
+        tags = [t.strip() for t in str(opts.get("tags", "")).split(",") if t.strip()]
     if not tags:
         return StageResult(
             stage="evaluate", success=False,
-            error="pass --opt tags=<tag>[,<tag>...]; first tag is the baseline",
+            error="pass --opt tags=... or --opt pairs=base:treat[,base:treat...]",
             duration_s=round(time.time() - started, 2),
         )
     index_root = Path(str(opts.get("index_root", "")) or output_dir())
@@ -61,13 +82,19 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
         )
 
     metrics: dict = {"test_n": len(test_rows), "arms": arms}
-    if len(tags) > 1:
+    if pairs:
+        metrics["seed_pairs"] = [f"{b}:{t}" for b, t in pairs]
+        metrics["aggregate"] = aggregate_pairs(arms, pairs)
+    elif len(tags) > 1:
         metrics["deltas_vs_" + tags[0]] = _deltas(arms, tags)
 
     for tag in tags:
         print(f"[evaluate] {tag}: macro_f1={arms[tag]['macro_f1']} "
               f"acc={arms[tag]['accuracy']}", flush=True)
-    if len(tags) > 1:
+    if pairs:
+        print(f"[evaluate] aggregate over {len(pairs)} seed pair(s): "
+              f"{json.dumps(metrics['aggregate']['summary'], indent=1)}", flush=True)
+    elif len(tags) > 1:
         print(f"[evaluate] deltas vs {tags[0]}: "
               f"{json.dumps(metrics['deltas_vs_' + tags[0]], indent=1)}", flush=True)
 
@@ -96,6 +123,43 @@ def _score(tag: str, test_rows: list[dict], opts: dict) -> dict:
     scored["confusion"] = cm.tolist()
     scored["train_sources"] = report.get("train_sources", {})
     return scored
+
+
+def aggregate_pairs(arms: dict, pairs: list[tuple[str, str]]) -> dict:
+    """Mean +/- sample std of within-pair deltas across seed pairs.
+
+    Pure function over already-scored arms so it unit-tests without torch.
+    """
+    import statistics
+
+    def spread(values: list[float]) -> dict:
+        return {
+            "mean": round(statistics.mean(values), 4),
+            "std": round(statistics.stdev(values), 4) if len(values) > 1 else 0.0,
+            "values": [round(v, 4) for v in values],
+        }
+
+    macro = [arms[t]["macro_f1"] - arms[b]["macro_f1"] for b, t in pairs]
+    acc = [arms[t]["accuracy"] - arms[b]["accuracy"] for b, t in pairs]
+    classes = sorted(arms[pairs[0][0]]["per_class"])
+    per_class = {
+        cls: {
+            "recall_delta": spread(
+                [arms[t]["per_class"][cls]["recall"] - arms[b]["per_class"][cls]["recall"]
+                 for b, t in pairs]
+            ),
+            "f1_delta": spread(
+                [arms[t]["per_class"][cls]["f1"] - arms[b]["per_class"][cls]["f1"]
+                 for b, t in pairs]
+            ),
+        }
+        for cls in classes
+    }
+    return {
+        "n_pairs": len(pairs),
+        "summary": {"macro_f1_delta": spread(macro), "accuracy_delta": spread(acc)},
+        "per_class": per_class,
+    }
 
 
 def _deltas(arms: dict, tags: list[str]) -> dict:

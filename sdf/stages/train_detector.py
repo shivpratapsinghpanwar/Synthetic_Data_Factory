@@ -46,7 +46,8 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
         source_counts[row["source"]] = source_counts.get(row["source"], 0) + 1
 
     try:
-        report = _train(cfg, train_rows, val_rows, labels, tag, opts)
+        report = _train(cfg, train_rows, val_rows, labels, tag, opts,
+                        source_counts)
     except Exception as exc:  # noqa: BLE001
         import traceback
 
@@ -58,7 +59,6 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
             duration_s=round(time.time() - started, 2),
         )
 
-    report["train_sources"] = source_counts
     return StageResult(
         stage="train_detector", success=True, metrics=report,
         outputs=[f"detector/{tag}/"],
@@ -66,7 +66,7 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     )
 
 
-def _train(cfg, train_rows, val_rows, labels, tag, opts) -> dict:
+def _train(cfg, train_rows, val_rows, labels, tag, opts, source_counts) -> dict:
     import torch
     from torch.utils.data import DataLoader
 
@@ -137,6 +137,7 @@ def _train(cfg, train_rows, val_rows, labels, tag, opts) -> dict:
         "device": device,
         "classes": classes,
         "train_n": len(train_rows),
+        "train_sources": source_counts,
         "val_n": len(val_rows),
         "best": best,
         "history": history,

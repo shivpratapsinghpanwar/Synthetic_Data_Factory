@@ -533,6 +533,35 @@ def test_train_detector_requires_indexes(tmp_path):
     assert "index" in result.error
 
 
+def test_evaluate_pair_aggregation_math():
+    from sdf.stages.evaluate import aggregate_pairs
+
+    def arm(macro, acc, df_recall):
+        return {
+            "macro_f1": macro, "accuracy": acc,
+            "per_class": {"df": {"recall": df_recall, "f1": df_recall}},
+        }
+
+    arms = {
+        "b1": arm(0.70, 0.80, 0.50), "t1": arm(0.72, 0.81, 0.60),
+        "b2": arm(0.71, 0.82, 0.55), "t2": arm(0.71, 0.82, 0.59),
+    }
+    agg = aggregate_pairs(arms, [("b1", "t1"), ("b2", "t2")])
+    assert agg["n_pairs"] == 2
+    assert agg["summary"]["macro_f1_delta"]["mean"] == 0.01
+    assert agg["per_class"]["df"]["recall_delta"]["values"] == [0.1, 0.04]
+    assert agg["per_class"]["df"]["recall_delta"]["mean"] == 0.07
+    assert agg["per_class"]["df"]["recall_delta"]["std"] > 0
+
+
+def test_evaluate_rejects_malformed_pairs():
+    from sdf.stages import evaluate
+
+    result = evaluate.run(config.load(), {"pairs": "no-colon-here"})
+    assert not result.success
+    assert "baseline:treatment" in result.error
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect
