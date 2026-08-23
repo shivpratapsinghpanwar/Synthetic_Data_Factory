@@ -1,0 +1,49 @@
+# Configuration for the Kaggle execution runner.
+#
+# Everything the runner needs is here so that an automated edit -> commit ->
+# push -> run loop never has to guess. Values can be overridden per-invocation
+# with CLI flags (see `python -m kaggle_runner run --help`).
+
+[repo]
+# HTTPS clone URL used *inside* the Kaggle kernel. Must be reachable without
+# credentials, or supply a token via the `git_token_secret` setting below.
+url = "https://github.com/shivpratapsinghpanwar/Synthetic_Data_Factory.git"
+branch = "main"
+# Name of a Kaggle Secret holding a GitHub PAT. Leave empty for public repos.
+git_token_secret = ""
+
+[kernel]
+# The single dedicated kernel this runner pushes to. Each run creates a new
+# version of this kernel rather than a new kernel.
+owner = "shivpratap0007"
+slug = "sdf-runner"
+title = "SDF Runner"
+is_private = true
+# Internet is REQUIRED: the kernel git-clones the repo at the target commit.
+enable_internet = true
+# Keep GPU off. Infrastructure smoke tests must not burn GPU quota.
+enable_gpu = false
+# Accelerator id passed to `kaggle kernels push --accelerator`. Empty = CPU.
+# Valid GPU values include "NvidiaTeslaT4", "NvidiaL4", "NvidiaTeslaA100".
+accelerator = ""
+# Hard cap on kernel run time, in seconds.
+timeout_s = 1800
+
+[job]
+# Command executed inside the cloned repo. This is the *only* line that needs
+# to change when the runner graduates from smoke test to real workloads.
+entrypoint = "python kaggle_jobs/smoke_test.py"
+# Optional requirements file (repo-relative). Empty string skips pip install.
+requirements = ""
+# If true, a failing entrypoint also fails the Kaggle kernel itself. Default
+# false so that output artifacts are always retrievable.
+fail_kernel_on_error = false
+
+[local]
+runs_dir = "runs"
+poll_interval_s = 15
+poll_backoff_max_s = 60
+poll_timeout_s = 5400
+# Caps that keep the machine-readable summary small enough for an agent loop.
+log_tail_lines = 40
+traceback_max_chars = 4000
