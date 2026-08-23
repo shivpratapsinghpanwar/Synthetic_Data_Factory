@@ -6,6 +6,12 @@ without retraining. Kaggle datasets are the free persistence layer: publish a
 run's output folder as a new version of one private dataset, then attach it
 via ``dataset_sources`` like any other dataset.
 
+Contract (verified live): each dataset VERSION is a full snapshot of one
+run's output, served flattened at the dataset root - Kaggle extracts the
+zip-mode upload and strips the staging folder. Consumers therefore see
+/kaggle/input/<slug>/lora/..., synthetic/..., etc. directly. The version
+message records which run a version came from.
+
 CLI: ``python -m kaggle_runner publish [run_id]``
 """
 
@@ -49,9 +55,13 @@ def stage_folder(cfg: Config, run_id: str, source: Path) -> Path:
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
 
-    # Kaggle versions replace the whole file set; nest under the run id so one
-    # dataset accumulates every published run side by side.
-    shutil.copytree(source, folder / run_id)
+    # One run per version: Kaggle flattens the upload server-side, so nesting
+    # under the run id would not survive anyway. copy content to staging root.
+    for item in source.iterdir():
+        if item.is_dir():
+            shutil.copytree(item, folder / item.name)
+        else:
+            shutil.copy2(item, folder / item.name)
 
     (folder / "dataset-metadata.json").write_text(
         json.dumps(

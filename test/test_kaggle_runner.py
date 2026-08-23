@@ -442,7 +442,8 @@ def test_publish_staging_layout(tmp_path):
     meta = _json.loads((folder / "dataset-metadata.json").read_text())
     assert meta["id"] == artifacts.dataset_slug(cfg)
     assert meta["id"].endswith("-artifacts")
-    assert (folder / "run123" / "lora" / "df" / "adapter.bin").exists()
+    # content sits at staging root - one run per dataset version
+    assert (folder / "lora" / "df" / "adapter.bin").exists()
 
 
 def test_publish_refuses_missing_source(tmp_path):
