@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -129,6 +130,17 @@ def _validate(cfg: Config) -> None:
         raise ConfigError("[kernel] slug must be a bare kernel slug")
     if not cfg.job.entrypoint.strip():
         raise ConfigError("[job] entrypoint must not be empty")
+    # Git-Bash on Windows (MSYS) silently rewrites /kaggle/... path arguments
+    # to C:/Program Files/Git/kaggle/... before they reach us; the kernel then
+    # executes garbage. Catch it at preflight instead of after queueing.
+    # A single drive letter followed by :/ or :\ (not preceded by another
+    # letter, so URL schemes like https:// do not match).
+    if re.search(r"(?<![A-Za-z0-9])[A-Za-z]:[/\\]", cfg.job.entrypoint):
+        raise ConfigError(
+            "[job] entrypoint contains a Windows path - MSYS path mangling? "
+            "Prefix the command with MSYS_NO_PATHCONV=1 (Git Bash) and retry: "
+            f"{cfg.job.entrypoint!r}"
+        )
     if cfg.kernel.enable_gpu and not cfg.kernel.accelerator:
         raise ConfigError(
             "[kernel] enable_gpu = true requires a non-empty accelerator "

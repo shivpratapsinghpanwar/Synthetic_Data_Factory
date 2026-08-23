@@ -420,6 +420,21 @@ def test_summary_reports_kernel_error_even_if_job_claimed_success(tmp_path):
     assert result["success"] is False
 
 
+def test_entrypoint_rejects_msys_mangled_paths():
+    """Regression: Git Bash rewrote /kaggle/working to C:/Program Files/Git/...
+    inside the entrypoint and the kernel executed garbage."""
+    cfg = config.load()
+    cfg.job.entrypoint = (
+        "SDF_CACHE_DIR=C:/Program Files/Git/kaggle/working python -m sdf run-stage audit"
+    )
+    try:
+        config._validate(cfg)
+    except config.ConfigError as exc:
+        assert "MSYS" in str(exc)
+        return
+    raise AssertionError("expected ConfigError for mangled path")
+
+
 # ------------------------------------------------------------------- publish
 def test_publish_staging_layout(tmp_path):
     import json as _json
