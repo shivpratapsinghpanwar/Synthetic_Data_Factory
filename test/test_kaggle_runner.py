@@ -123,6 +123,24 @@ def test_builder_rejects_non_literal_payload():
     raise AssertionError("expected BuildError for a non-literal SDF_JOB")
 
 
+def test_dataset_sources_flow_into_metadata():
+    cfg = config.load()
+    cfg.kernel.dataset_sources = ["kmader/skin-cancer-mnist-ham10000"]
+    meta = builder.kernel_metadata(cfg)
+    assert meta["dataset_sources"] == ["kmader/skin-cancer-mnist-ham10000"]
+
+
+def test_dataset_sources_validation():
+    cfg = config.load()
+    cfg.kernel.dataset_sources = ["no-slash-here"]
+    try:
+        config._validate(cfg)
+    except config.ConfigError as exc:
+        assert "dataset_sources" in str(exc)
+    else:
+        raise AssertionError("expected ConfigError for bad dataset source")
+
+
 def test_kernel_metadata_shape():
     cfg = config.load()
     meta = builder.kernel_metadata(cfg)

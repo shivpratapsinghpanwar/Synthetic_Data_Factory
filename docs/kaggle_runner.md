@@ -39,7 +39,7 @@ logs by path. This is a hard limit in code, not a convention.
 ## 2. One-time setup
 
 ```bash
-pip install --upgrade kaggle
+uv sync   # installs the kaggle CLI and all control-plane deps (uv.lock)
 ```
 
 Then authenticate — **you must do this yourself; the runner never handles your

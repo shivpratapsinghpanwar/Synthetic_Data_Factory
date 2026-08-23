@@ -1,0 +1,22 @@
+# Configuration for the synthetic-data pipeline (see docs/pipeline_design.md).
+# The Kaggle execution side is configured separately in runner.toml.
+
+[dataset]
+name = "ham10000"
+kaggle_slug = "kmader/skin-cancer-mnist-ham10000"
+# Explicit local dataset root; empty auto-discovers $SDF_DATA_ROOT then /kaggle/input.
+data_root = ""
+
+[splits]
+seed = 20260823
+val_frac = 0.10
+test_frac = 0.15
+# Split by physical lesion, never by image - prevents near-duplicate leakage.
+group_key = "lesion_id"
+
+[generator]
+backend = "sd15_lora"
+base_model = "runwayml/stable-diffusion-v1-5"
+resolution = 512
+# Classes with fewer real *training* images than this are generation targets.
+rare_class_max_count = 600

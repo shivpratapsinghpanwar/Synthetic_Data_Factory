@@ -111,7 +111,7 @@ def kernel_metadata(cfg: Config) -> dict:
         "is_private": "true" if cfg.kernel.is_private else "false",
         "enable_gpu": "true" if cfg.kernel.enable_gpu else "false",
         "enable_internet": "true" if cfg.kernel.enable_internet else "false",
-        "dataset_sources": [],
+        "dataset_sources": list(cfg.kernel.dataset_sources),
         "competition_sources": [],
         "kernel_sources": [],
         "model_sources": [],

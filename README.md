@@ -8,11 +8,24 @@ compact, machine-readable result — the harness for an autonomous
 edit → commit → push → run → diagnose → fix loop.
 
 ```bash
-pip install -r requirements-runner.txt
-kaggle auth login                    # one-time, done by you
-python -m kaggle_runner doctor       # verify setup
-python -m kaggle_runner run --push   # run HEAD on Kaggle (CPU, no GPU quota)
+uv sync                                 # reproducible environment (uv.lock)
+uv run kaggle auth login                # one-time, done by you
+uv run python -m kaggle_runner doctor   # verify setup
+uv run python -m kaggle_runner run --push  # run HEAD on Kaggle (CPU, no GPU quota)
 ```
 
 Full documentation: [docs/kaggle_runner.md](docs/kaggle_runner.md)
+
+## Synthetic data pipeline
+
+The pipeline that makes the motto true: generate synthetic medical-condition
+images (first target: HAM10000 skin lesions, SD 1.5 + LoRA) and measure the
+lift they give a condition detector. Stages run on Kaggle via the runner:
+
+```bash
+uv run python -m sdf stages                       # list pipeline stages
+uv run python -m kaggle_runner run --entrypoint "python -m sdf run-stage audit"
+```
+
+Design: [docs/pipeline_design.md](docs/pipeline_design.md)
 

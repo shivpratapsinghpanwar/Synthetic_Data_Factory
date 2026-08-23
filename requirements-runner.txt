@@ -1,3 +1,0 @@
-# Dependencies for the Kaggle execution runner only (not for synthetic-data work).
-# Install with: pip install -r requirements-runner.txt
-kaggle>=2.2.4
