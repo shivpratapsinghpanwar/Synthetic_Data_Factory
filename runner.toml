@@ -29,7 +29,10 @@ accelerator = ""
 # Hard cap on kernel run time, in seconds.
 timeout_s = 1800
 # Kaggle datasets to mount read-only under /kaggle/input/. Attaching is free.
-dataset_sources = ["kmader/skin-cancer-mnist-ham10000"]
+dataset_sources = [
+    "kmader/skin-cancer-mnist-ham10000",        # real dataset (read-only)
+    "shivpratap0007/sdf-runner-artifacts",      # trained adapters + synthetic images (latest version)
+]
 
 [job]
 # Command executed inside the cloned repo. This is the *only* line that needs
