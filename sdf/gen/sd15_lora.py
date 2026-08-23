@@ -137,6 +137,10 @@ def train(cfg, records, cls: str, out_dir: Path, opts: dict) -> dict:
     scaler = torch.amp.GradScaler("cuda", enabled=device == "cuda")
     scaling = vae.config.scaling_factor
 
+    out_dir.mkdir(parents=True, exist_ok=True)
+    adapter_dir = out_dir / ADAPTER_DIR_NAME
+    checkpoint_every = int(opts.get("checkpoint_every", 300))
+
     losses: list[float] = []
     step = 0
     t0 = time.time()
@@ -170,9 +174,12 @@ def train(cfg, records, cls: str, out_dir: Path, opts: dict) -> dict:
             if step % 25 == 0 or step == steps:
                 recent = sum(losses[-25:]) / len(losses[-25:])
                 print(f"[train_lora] {cls} step {step}/{steps} loss={recent:.4f}", flush=True)
+            # Periodic checkpoint: a session death mid-run loses at most
+            # checkpoint_every steps, and the adapter stays retrievable.
+            if checkpoint_every and step % checkpoint_every == 0 and step < steps:
+                unet.save_pretrained(str(adapter_dir))
+                print(f"[train_lora] {cls} checkpoint at step {step}", flush=True)
 
-    out_dir.mkdir(parents=True, exist_ok=True)
-    adapter_dir = out_dir / ADAPTER_DIR_NAME
     unet.save_pretrained(str(adapter_dir))
 
     report = {
