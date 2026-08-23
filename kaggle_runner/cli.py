@@ -169,6 +169,29 @@ def cmd_result(args) -> int:
     return EXIT_OK if result["success"] else EXIT_RUN_FAILED
 
 
+# ----------------------------------------------------------------------- publish
+def cmd_publish(args) -> int:
+    """Publish a run's output as a version of the private artifacts dataset."""
+    from . import artifacts
+
+    try:
+        cfg = _load(args)
+    except config.ConfigError as exc:
+        print(f"config error: {exc}", file=sys.stderr)
+        return EXIT_INFRA
+
+    run_id = args.run_id or (cfg.runs_path / "latest.txt").read_text().strip()
+    try:
+        result = artifacts.publish(cfg, run_id)
+    except (artifacts.PublishError, kaggle_cli.KaggleCliError) as exc:
+        print(f"publish failed: {exc}", file=sys.stderr)
+        return EXIT_INFRA
+
+    print(f"{result['action']}: {result['dataset']}  (run {result['run_id']})")
+    print(f"attach in runner.toml dataset_sources or browse {result['url']}")
+    return EXIT_OK
+
+
 # -------------------------------------------------------------------------- logs
 def cmd_logs(args) -> int:
     """Print a bounded slice of a stored full log - never the whole thing by default."""
@@ -241,6 +264,13 @@ def build_parser() -> argparse.ArgumentParser:
     res_p.add_argument("run_id", nargs="?", help="defaults to the latest run")
     res_p.add_argument("--json", action="store_true")
     res_p.set_defaults(func=cmd_result)
+
+    pub_p = sub.add_parser(
+        "publish", help="upload a run's output as a private Kaggle dataset version"
+    )
+    common(pub_p)
+    pub_p.add_argument("run_id", nargs="?", help="defaults to the latest run")
+    pub_p.set_defaults(func=cmd_publish)
 
     log_p = sub.add_parser("logs", help="show part of a stored full log")
     common(log_p)

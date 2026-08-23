@@ -420,6 +420,41 @@ def test_summary_reports_kernel_error_even_if_job_claimed_success(tmp_path):
     assert result["success"] is False
 
 
+# ------------------------------------------------------------------- publish
+def test_publish_staging_layout(tmp_path):
+    import json as _json
+
+    from kaggle_runner import artifacts
+
+    cfg = config.load()
+    src = tmp_path / "output"
+    (src / "lora" / "df").mkdir(parents=True)
+    (src / "lora" / "df" / "adapter.bin").write_bytes(b"x" * 10)
+
+    import kaggle_runner.artifacts as art
+    original = art.STAGING_DIR
+    art.STAGING_DIR = tmp_path / "staging"
+    try:
+        folder = artifacts.stage_folder(cfg, "run123", src)
+    finally:
+        art.STAGING_DIR = original
+
+    meta = _json.loads((folder / "dataset-metadata.json").read_text())
+    assert meta["id"] == artifacts.dataset_slug(cfg)
+    assert meta["id"].endswith("-artifacts")
+    assert (folder / "run123" / "lora" / "df" / "adapter.bin").exists()
+
+
+def test_publish_refuses_missing_source(tmp_path):
+    from kaggle_runner import artifacts
+
+    try:
+        artifacts.stage_folder(config.load(), "runX", tmp_path / "absent")
+    except artifacts.PublishError:
+        return
+    raise AssertionError("expected PublishError")
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     """Tiny runner so the file works without pytest installed."""
