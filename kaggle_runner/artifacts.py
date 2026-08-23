@@ -59,12 +59,30 @@ def stage_folder(cfg: Config, run_ids: list[str], sources: list[Path]) -> Path:
 
     # Content sits at the staging root: Kaggle flattens zip-mode uploads
     # server-side, so per-run nesting would not survive anyway.
+    #
+    # Collision policy:
+    #   *.jsonl            -> concatenate (manifests must accumulate; dropping
+    #                         a run's rows would silently exclude its images
+    #                         from augmentation)
+    #   stage_*.json       -> keep both under a deduped name (augment globs
+    #                         stage_quality_gate*.json and unions the flags)
+    #   everything else    -> later run wins
     for source in sources:
         for item in source.rglob("*"):
-            if item.is_file():
-                rel = item.relative_to(source)
-                target = folder / rel
-                target.parent.mkdir(parents=True, exist_ok=True)
+            if not item.is_file():
+                continue
+            rel = item.relative_to(source)
+            target = folder / rel
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if target.exists() and item.suffix == ".jsonl":
+                with target.open("ab") as out_fh, item.open("rb") as in_fh:
+                    out_fh.write(in_fh.read())
+            elif target.exists() and item.name.startswith("stage_"):
+                n = 2
+                while (dedup := target.with_name(f"{target.stem}.{n}{target.suffix}")).exists():
+                    n += 1
+                shutil.copy2(item, dedup)
+            else:
                 shutil.copy2(item, target)
 
     (folder / "dataset-metadata.json").write_text(

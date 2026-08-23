@@ -479,8 +479,39 @@ def test_publish_merges_multiple_runs(tmp_path):
 
     assert (folder / "synthetic" / "df" / "x.png").exists()
     assert (folder / "synthetic" / "vasc" / "y.png").exists()
-    # later run wins on collisions
+    # later run wins on plain collisions
     assert (folder / "shared.json").read_text(encoding="utf-8") == "from-b"
+
+
+def test_publish_merge_concatenates_manifests_and_keeps_stage_jsons(tmp_path):
+    from kaggle_runner import artifacts
+
+    cfg = config.load()
+    a = tmp_path / "a"
+    a.mkdir()
+    (a / "synthetic_manifest.jsonl").write_text('{"cls": "df"}
+', encoding="utf-8")
+    (a / "stage_quality_gate.json").write_text('{"cls": "df"}', encoding="utf-8")
+    b = tmp_path / "b"
+    b.mkdir()
+    (b / "synthetic_manifest.jsonl").write_text('{"cls": "vasc"}
+', encoding="utf-8")
+    (b / "stage_quality_gate.json").write_text('{"cls": "bcc"}', encoding="utf-8")
+
+    import kaggle_runner.artifacts as art
+    original = art.STAGING_DIR
+    art.STAGING_DIR = tmp_path / "staging"
+    try:
+        folder = artifacts.stage_folder(cfg, ["runA", "runB"], [a, b])
+    finally:
+        art.STAGING_DIR = original
+
+    # manifests concatenate - dropping rows would silently exclude images
+    lines = (folder / "synthetic_manifest.jsonl").read_text(encoding="utf-8").splitlines()
+    assert len(lines) == 2 and "df" in lines[0] and "vasc" in lines[1]
+    # colliding stage jsons are both kept (augment globs stage_quality_gate*)
+    assert (folder / "stage_quality_gate.json").exists()
+    assert (folder / "stage_quality_gate.2.json").exists()
 
 
 # ------------------------------------------------------------------ fallback
