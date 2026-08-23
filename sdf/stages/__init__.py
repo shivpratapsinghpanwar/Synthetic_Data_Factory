@@ -1,6 +1,6 @@
 """Pipeline stages. Each stage: (PipelineConfig, opts: dict|None) -> StageResult."""
 
-from . import audit, augment, probe_ml, quality_gate, sample, train_lora
+from . import audit, augment, evaluate, probe_ml, quality_gate, sample, train_detector, train_lora
 from .base import StageResult, write_result  # noqa: F401
 
 REGISTRY = {
@@ -10,4 +10,6 @@ REGISTRY = {
     "sample": sample.run,
     "quality_gate": quality_gate.run,
     "augment": augment.run,
+    "train_detector": train_detector.run,
+    "evaluate": evaluate.run,
 }

@@ -45,7 +45,7 @@ fail_kernel_on_error = false
 runs_dir = "runs"
 poll_interval_s = 15
 poll_backoff_max_s = 60
-poll_timeout_s = 5400
+poll_timeout_s = 14400
 # Caps that keep the machine-readable summary small enough for an agent loop.
 log_tail_lines = 40
 traceback_max_chars = 4000

@@ -460,6 +460,79 @@ def test_augment_works_without_any_synthetic(tmp_path):
     assert result.metrics["train_total"] > 0
 
 
+# ------------------------------------------------------------------ detector
+def test_detector_metrics_math():
+    from sdf import detect
+
+    # 3 classes; class 2 never predicted correctly
+    y_true = [0, 0, 1, 1, 2, 2]
+    y_pred = [0, 0, 1, 0, 0, 1]
+    cm = detect.confusion_matrix(y_true, y_pred, 3)
+    m = detect.metrics_from_confusion(cm, ["a", "b", "c"])
+    assert m["per_class"]["a"]["recall"] == 1.0
+    assert m["per_class"]["c"]["recall"] == 0.0
+    assert m["per_class"]["c"]["support"] == 2
+    assert m["n"] == 6
+    assert 0 < m["macro_f1"] < 1
+
+
+def test_label_map_is_deterministic():
+    from sdf import detect
+
+    rows = [{"cls": "nv"}, {"cls": "df"}, {"cls": "mel"}, {"cls": "df"}]
+    assert detect.label_map(rows) == {"df": 0, "mel": 1, "nv": 2}
+
+
+def test_load_index_errors_clearly(tmp_path):
+    from sdf import detect
+
+    try:
+        detect.load_index(tmp_path / "train_index.csv")
+    except FileNotFoundError as exc:
+        assert "augment" in str(exc)
+        return
+    raise AssertionError("expected FileNotFoundError")
+
+
+def test_evaluate_refuses_synthetic_test_rows(tmp_path):
+    import os
+
+    from sdf.stages import evaluate
+
+    (tmp_path / "test_index.csv").write_text(
+        "path,cls,source\nx.png,df,synthetic\n", encoding="utf-8"
+    )
+    os.environ["SDF_OUTPUT_DIR"] = str(tmp_path)
+    try:
+        result = evaluate.run(config.load(), {"tags": "real_only"})
+    finally:
+        os.environ.pop("SDF_OUTPUT_DIR", None)
+    assert not result.success
+    assert "non-real" in result.error
+
+
+def test_evaluate_requires_tags():
+    from sdf.stages import evaluate
+
+    result = evaluate.run(config.load(), {})
+    assert not result.success
+    assert "tags" in result.error
+
+
+def test_train_detector_requires_indexes(tmp_path):
+    import os
+
+    from sdf.stages import train_detector
+
+    os.environ["SDF_OUTPUT_DIR"] = str(tmp_path)
+    try:
+        result = train_detector.run(config.load(), {"tag": "x"})
+    finally:
+        os.environ.pop("SDF_OUTPUT_DIR", None)
+    assert not result.success
+    assert "index" in result.error
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect

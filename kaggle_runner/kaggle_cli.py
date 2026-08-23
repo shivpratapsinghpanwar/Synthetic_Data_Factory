@@ -51,7 +51,13 @@ def run(*args: str, check: bool = True, timeout: int = 900) -> CliResult:
     """Invoke the Kaggle CLI and capture output."""
     cmd = _base_cmd() + list(args)
     env = dict(os.environ)
-    env.setdefault("PYTHONIOENCODING", "utf-8")
+    # Force UTF-8 mode in the child CLI. Without this, on Windows the CLI
+    # writes downloaded text files (e.g. the kernel console log) with the
+    # cp1252 locale encoding and crashes on progress-bar characters like
+    # U+258F that GPU runs emit. PYTHONUTF8 covers file I/O defaults;
+    # PYTHONIOENCODING covers the std streams.
+    env["PYTHONUTF8"] = "1"
+    env["PYTHONIOENCODING"] = "utf-8"
     try:
         proc = subprocess.run(
             cmd, capture_output=True, text=True, timeout=timeout, env=env,
