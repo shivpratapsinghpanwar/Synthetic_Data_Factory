@@ -129,7 +129,11 @@ macro metrics. FID is tracked as a diagnostic, not a goal.
   as diagnostic. Merged into one artifacts-dataset version (manifests
   concatenate on merge; a later-wins policy would have silently dropped a
   run's rows).
-- **M5 — the number** detector A/B, rare-class delta reported.
+- **M5 — the number** ✅ 3 seeds x 2 arms, all four rare classes augmented
+  (+400 gated images). Result: macro metrics unchanged; vasc F1
+  +0.050 +/- 0.013 (consistent); bcc slightly degraded; strongest consistent
+  effect off-target: melanoma recall +0.116 +/- 0.048 via the class-balance
+  shift. Full numbers + interpretation: `docs/results.md`.
   Single-seed df-only pilot (run 20260823T105736Z): acc +1.4pt, macro-F1
   +0.4pt, df recall moved by exactly one test image (n=17) - noise-dominated,
   as predicted; treated strictly as pipeline validation. The claimable

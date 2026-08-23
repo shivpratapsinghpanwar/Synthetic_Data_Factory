@@ -1,0 +1,52 @@
+{
+  "duration_s": 20.85,
+  "error": "",
+  "metrics": {
+    "accepted_synthetic": 400,
+    "manifest_rows": 400,
+    "per_class": {
+      "akiec": {
+        "real": 243,
+        "synthetic": 100
+      },
+      "bcc": {
+        "real": 384,
+        "synthetic": 100
+      },
+      "bkl": {
+        "real": 823,
+        "synthetic": 0
+      },
+      "df": {
+        "real": 86,
+        "synthetic": 100
+      },
+      "mel": {
+        "real": 833,
+        "synthetic": 0
+      },
+      "nv": {
+        "real": 5027,
+        "synthetic": 0
+      },
+      "vasc": {
+        "real": 103,
+        "synthetic": 100
+      }
+    },
+    "skipped": {
+      "flagged": 0,
+      "missing_file": 0,
+      "not_marked_synthetic": 0
+    },
+    "syn_root": "/kaggle/input/sdf-runner-artifacts",
+    "train_total": 7899
+  },
+  "outputs": [
+    "train_index.csv",
+    "val_index.csv",
+    "test_index.csv"
+  ],
+  "stage": "augment",
+  "success": true
+}

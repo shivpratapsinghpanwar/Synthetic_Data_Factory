@@ -28,4 +28,5 @@ uv run python -m kaggle_runner run --entrypoint "python -m sdf run-stage audit"
 ```
 
 Design: [docs/pipeline_design.md](docs/pipeline_design.md)
+Measured results: [docs/results.md](docs/results.md)
 
