@@ -380,6 +380,86 @@ def test_quality_gate_requires_synthetic_images(tmp_path):
     assert "no synthetic images" in result.error
 
 
+# ------------------------------------------------------------------- augment
+def test_augment_composes_real_and_synthetic(tmp_path):
+    import csv as _csv
+    import os
+
+    from PIL import Image
+
+    from sdf import manifest as manifest_mod
+    from sdf.stages import augment
+
+    build_fixture(tmp_path)
+    cfg = fixture_cfg(tmp_path)
+
+    out = tmp_path / "out"
+    syn = out / "synthetic" / "df"
+    syn.mkdir(parents=True)
+    for i in range(3):
+        Image.new("RGB", (32, 32), color=(i * 40, 10, 10)).save(syn / f"syn_df_{i}.png")
+        manifest_mod.append(
+            out / "synthetic_manifest.jsonl",
+            manifest_mod.new_record(
+                image_id=f"syn_df_{i}", file=f"synthetic/df/syn_df_{i}.png",
+                cls="df", backend="sd15_lora", base_model="m", checkpoint="c",
+                seed=i, prompt="p",
+            ),
+        )
+    # one manifest row whose file is missing -> must be skipped, not crash
+    manifest_mod.append(
+        out / "synthetic_manifest.jsonl",
+        manifest_mod.new_record(
+            image_id="syn_df_ghost", file="synthetic/df/ghost.png", cls="df",
+            backend="sd15_lora", base_model="m", checkpoint="c", seed=99, prompt="p",
+        ),
+    )
+    # quality gate flags one image -> excluded
+    (out / "stage_quality_gate.json").write_text(
+        '{"metrics": {"memorization": {"flagged": [{"image": "syn_df_0.png"}]}}}',
+        encoding="utf-8",
+    )
+
+    os.environ["SDF_OUTPUT_DIR"] = str(out)
+    try:
+        result = augment.run(cfg, {})
+    finally:
+        os.environ.pop("SDF_OUTPUT_DIR", None)
+
+    assert result.success, result.error
+    assert result.metrics["accepted_synthetic"] == 2
+    assert result.metrics["skipped"] == {
+        "flagged": 1, "missing_file": 1, "not_marked_synthetic": 0,
+    }
+
+    with (out / "train_index.csv").open(newline="") as fh:
+        rows = list(_csv.DictReader(fh))
+    sources = {r["source"] for r in rows}
+    assert sources == {"real", "synthetic"}
+    # synthetic entries only ever land in the train index
+    for name in ("val_index.csv", "test_index.csv"):
+        with (out / name).open(newline="") as fh:
+            assert all(r["source"] == "real" for r in _csv.DictReader(fh))
+
+
+def test_augment_works_without_any_synthetic(tmp_path):
+    """The real-only baseline path: no manifest at all."""
+    import os
+
+    from sdf.stages import augment
+
+    build_fixture(tmp_path)
+    out = tmp_path / "out"
+    os.environ["SDF_OUTPUT_DIR"] = str(out)
+    try:
+        result = augment.run(fixture_cfg(tmp_path), {})
+    finally:
+        os.environ.pop("SDF_OUTPUT_DIR", None)
+    assert result.success
+    assert result.metrics["accepted_synthetic"] == 0
+    assert result.metrics["train_total"] > 0
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect
