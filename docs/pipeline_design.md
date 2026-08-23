@@ -117,8 +117,13 @@ macro metrics. FID is tracked as a diagnostic, not a goal.
 
 - **M0 — infrastructure** ✅ runner + result contract (`docs/kaggle_runner.md`)
 - **M1 — audit green on Kaggle** ✅ dataset attached, stats + splits verified remotely (CPU)
-- **M2 — first LoRA** train on rarest class (`df`), sample 100, eyeball + FID
-- **M3 — quality gate** FID/KID + near-duplicate screen wired
+- **M2 — first LoRA** ✅ df (86 train images), 1200 steps @512px on T4 (~20 min);
+  100 samples in ~9 min; visually convincing dermatofibroma morphology
+- **M3 — quality gate** ✅ ran in-session on Kaggle: 0 flat, 0 duplicates,
+  0 memorization flags (max cosine similarity 0.852 vs threshold 0.985);
+  FID 328 vs the 12-image df val set, correctly marked unstable
 - **M4 — full generation** all rare classes to `target_per_class`
 - **M5 — the number** detector A/B, rare-class delta reported
+  (first single-seed A/B with df-only augmentation = pipeline validation;
+  the citable claim needs all rare classes and >= 3 seeds)
 - **M6 — scale out** second modality via adapter; second backend if warranted
