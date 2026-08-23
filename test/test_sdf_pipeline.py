@@ -313,6 +313,73 @@ def test_torchao_neutralizer_is_noop_without_torchao():
     assert neutralize_broken_torchao() is False
 
 
+# ------------------------------------------------------------------- quality
+def test_pixel_screen_catches_flat_and_duplicates(tmp_path):
+    from PIL import Image
+
+    from sdf import quality
+
+    good = tmp_path / "good.png"
+    img = Image.new("RGB", (32, 32))
+    img.putdata([(i % 255, (i * 7) % 255, (i * 13) % 255) for i in range(32 * 32)])
+    img.save(good)
+    flat = tmp_path / "flat.png"
+    Image.new("RGB", (32, 32), color=(80, 80, 80)).save(flat)
+    dupe = tmp_path / "dupe.png"
+    img.save(dupe)
+
+    screen = quality.pixel_screen([good, flat, dupe])
+    assert screen["flat"] == ["flat.png"]
+    assert screen["exact_duplicates"] == [("good.png", "dupe.png")]
+
+
+def test_frechet_distance_properties():
+    import numpy as np
+
+    from sdf import quality
+
+    rng = np.random.default_rng(0)
+    a = rng.normal(0, 1, (500, 8)).astype("float32")
+    b = rng.normal(0, 1, (500, 8)).astype("float32")
+    c = rng.normal(3, 1, (500, 8)).astype("float32")
+
+    near = quality.frechet_distance(a, b)
+    far = quality.frechet_distance(a, c)
+    assert near < 1.0, near          # same distribution -> tiny
+    assert far > 50.0, far           # shifted mean of 3 in 8 dims -> ~72
+    assert quality.frechet_distance(a, a) < 1e-3
+
+
+def test_memorization_check_flags_copies():
+    import numpy as np
+
+    from sdf import quality
+
+    rng = np.random.default_rng(1)
+    real = rng.normal(0, 1, (50, 16)).astype("float32")
+    fresh = rng.normal(0, 1, (3, 16)).astype("float32")
+    copied = real[7:8] * 1.0000001  # essentially identical to a real image
+    syn = np.concatenate([fresh, copied])
+
+    result = quality.memorization_check(syn, real, ["a", "b", "c", "copy"])
+    assert [f["image"] for f in result["flagged"]] == ["copy"]
+    assert result["max_similarity"] > 0.999
+
+
+def test_quality_gate_requires_synthetic_images(tmp_path):
+    import os
+
+    from sdf.stages import quality_gate
+
+    os.environ["SDF_OUTPUT_DIR"] = str(tmp_path)
+    try:
+        result = quality_gate.run(config.load(), {"cls": "df"})
+    finally:
+        os.environ.pop("SDF_OUTPUT_DIR", None)
+    assert not result.success
+    assert "no synthetic images" in result.error
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect
