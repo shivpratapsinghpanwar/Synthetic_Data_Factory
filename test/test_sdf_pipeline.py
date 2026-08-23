@@ -612,6 +612,42 @@ def test_report_renders_aggregate(tmp_path):
     assert "abc123" in text
 
 
+def test_backend_registry():
+    from sdf.gen import BackendError, get_backend
+
+    for name in ("sd15_lora", "ddpm"):
+        backend = get_backend(name)
+        assert hasattr(backend, "train")
+        assert hasattr(backend, "sample")
+        assert backend.ADAPTER_DIR_NAME
+    try:
+        get_backend("nope")
+    except BackendError as exc:
+        assert "nope" in str(exc)
+    else:
+        raise AssertionError("expected BackendError")
+
+
+def test_config_rejects_unknown_backend():
+    cfg = config.load()
+    cfg.generator.backend = "missingno"
+    try:
+        config.validate(cfg)
+    except config.ConfigError as exc:
+        assert "backend" in str(exc)
+    else:
+        raise AssertionError("expected ConfigError")
+
+
+def test_train_stage_rejects_unknown_backend(tmp_path):
+    from sdf.stages import train_lora
+
+    build_fixture(tmp_path)
+    result = train_lora.run(fixture_cfg(tmp_path), {"cls": "df", "backend": "nope"})
+    assert not result.success
+    assert "nope" in result.error
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect

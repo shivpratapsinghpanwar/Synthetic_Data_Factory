@@ -13,7 +13,7 @@ from pathlib import Path
 
 from .. import manifest
 from ..config import PipelineConfig, output_dir
-from ..gen import sd15_lora
+from ..gen import BackendError, get_backend
 from ..gen.prompts import CLASS_PROMPTS
 from .base import StageResult
 
@@ -31,9 +31,18 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
             duration_s=round(time.time() - started, 2),
         )
 
+    backend_name = str(opts.get("backend", cfg.generator.backend))
+    try:
+        backend = get_backend(backend_name)
+    except BackendError as exc:
+        return StageResult(
+            stage="sample", success=False, error=str(exc),
+            duration_s=round(time.time() - started, 2),
+        )
+
     adapter_dir = Path(
         str(opts.get("adapter_dir", ""))
-        or output_dir() / "lora" / cls / sd15_lora.ADAPTER_DIR_NAME
+        or output_dir() / "lora" / backend_name / cls / backend.ADAPTER_DIR_NAME
     )
     if not adapter_dir.is_dir():
         return StageResult(
@@ -45,7 +54,7 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
 
     out = output_dir() / "synthetic" / cls
     try:
-        rows = sd15_lora.sample(cfg, cls, adapter_dir, out, opts)
+        rows = backend.sample(cfg, cls, adapter_dir, out, opts)
     except Exception as exc:  # noqa: BLE001
         import traceback
 

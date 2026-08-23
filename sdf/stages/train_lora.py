@@ -11,7 +11,7 @@ from pathlib import Path
 
 from ..config import PipelineConfig, output_dir
 from ..data.base import DataError, get_adapter
-from ..gen import sd15_lora
+from ..gen import BackendError, get_backend
 from ..gen.prompts import CLASS_PROMPTS
 from ..splits import grouped_stratified_split
 from .base import StageResult
@@ -45,9 +45,18 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     class_records = [r for r in splits["train"] if r.cls == cls]
     print(f"[train_lora] class {cls}: {len(class_records)} train images", flush=True)
 
-    out = output_dir() / "lora" / cls
+    backend_name = str(opts.get("backend", cfg.generator.backend))
     try:
-        report = sd15_lora.train(cfg, class_records, cls, out, opts)
+        backend = get_backend(backend_name)
+    except BackendError as exc:
+        return StageResult(
+            stage="train_lora", success=False, error=str(exc),
+            duration_s=round(time.time() - started, 2),
+        )
+
+    out = output_dir() / "lora" / backend_name / cls
+    try:
+        report = backend.train(cfg, class_records, cls, out, opts)
     except Exception as exc:  # noqa: BLE001 - convert to a structured failure
         import traceback
 
