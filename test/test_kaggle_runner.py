@@ -43,6 +43,41 @@ def test_gpu_is_off_by_default():
     assert cfg.kernel.accelerator == ""
 
 
+def test_credentials_probe_recognises_oauth_login_file(tmp_path):
+    """Regression: `kaggle auth login` writes credentials.json, not kaggle.json.
+
+    An older hardcoded list missed it and reported "no credentials found" on a
+    perfectly authenticated machine.
+    """
+    import os
+
+    original = os.environ.get("KAGGLE_CONFIG_DIR")
+    for var in ("KAGGLE_API_TOKEN", "KAGGLE_USERNAME", "KAGGLE_KEY"):
+        os.environ.pop(var, None)
+    try:
+        os.environ["KAGGLE_CONFIG_DIR"] = str(tmp_path)
+
+        ok, detail = config.kaggle_credentials_present()
+        assert ok is False, detail
+
+        for name in ("credentials.json", "access_token", "kaggle.json"):
+            target = tmp_path / name
+            target.write_text("{}", encoding="utf-8")
+            ok, detail = config.kaggle_credentials_present()
+            assert ok is True, f"{name} not recognised: {detail}"
+            target.unlink()
+
+        # An unknown filename should still count - the CLI may have renamed it.
+        (tmp_path / "some_future_name.json").write_text("{}", encoding="utf-8")
+        ok, _ = config.kaggle_credentials_present()
+        assert ok is True
+    finally:
+        if original is None:
+            os.environ.pop("KAGGLE_CONFIG_DIR", None)
+        else:
+            os.environ["KAGGLE_CONFIG_DIR"] = original
+
+
 # -------------------------------------------------------------------- builder
 def test_bootstrap_injection_produces_valid_python():
     cfg = config.load()

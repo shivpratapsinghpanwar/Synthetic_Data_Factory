@@ -51,11 +51,20 @@ def preflight(cfg: Config, *, allow_dirty: bool = False, check_remote: bool = Tr
             )
         )
 
+    # The live API call is authoritative. The file probe is only a hint used to
+    # explain *why* auth failed, so an unrecognised credential filename can
+    # never block a session that actually authenticates fine.
+    auth_ok, auth_detail = kaggle_cli.authenticated()
     creds_ok, creds_detail = kaggle_credentials_present()
-    checks.append(Check("kaggle.credentials", creds_ok, creds_detail))
-    if creds_ok:
-        auth_ok, auth_detail = kaggle_cli.authenticated()
-        checks.append(Check("kaggle.auth", auth_ok, auth_detail))
+
+    checks.append(
+        Check(
+            "kaggle.credentials",
+            auth_ok or creds_ok,
+            creds_detail if creds_ok else f"{creds_detail} (CLI may still have its own store)",
+        )
+    )
+    checks.append(Check("kaggle.auth", auth_ok, auth_detail))
 
     checks.append(
         Check(

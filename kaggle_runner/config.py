@@ -142,22 +142,44 @@ def _validate(cfg: Config) -> None:
         )
 
 
-def kaggle_credentials_present() -> tuple[bool, str]:
-    """Best-effort check that the Kaggle CLI will be able to authenticate.
+# Credential files the Kaggle CLI is known to use. `credentials.json` is what
+# `kaggle auth login` (OAuth) writes; the others are the token-file and legacy
+# forms. This list is a *hint* only - see kaggle_credentials_present().
+_CREDENTIAL_FILES = ("credentials.json", "access_token", "kaggle.json")
 
-    Returns ``(ok, detail)``. Deliberately does not read any secret value.
+
+def kaggle_config_dir() -> Path:
+    """Directory the Kaggle CLI reads credentials from."""
+    override = os.environ.get("KAGGLE_CONFIG_DIR")
+    if override:
+        return Path(override)
+    return Path(os.path.expanduser("~")) / ".kaggle"
+
+
+def kaggle_credentials_present() -> tuple[bool, str]:
+    """Report where credentials appear to live, without reading any secret.
+
+    This is deliberately advisory. The Kaggle CLI has changed its credential
+    filenames before (OAuth login writes ``credentials.json``, which an older
+    hardcoded list missed), so a negative result here must never be treated as
+    proof that auth will fail - only the live API call in
+    ``kaggle_cli.authenticated()`` is authoritative.
     """
-    home = Path(os.path.expanduser("~"))
-    checks = [
-        (bool(os.environ.get("KAGGLE_API_TOKEN")), "KAGGLE_API_TOKEN env var"),
-        (
-            bool(os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY")),
-            "KAGGLE_USERNAME + KAGGLE_KEY env vars",
-        ),
-        ((home / ".kaggle" / "access_token").exists(), "~/.kaggle/access_token"),
-        ((home / ".kaggle" / "kaggle.json").exists(), "~/.kaggle/kaggle.json"),
-    ]
-    found = [label for ok, label in checks if ok]
-    if found:
-        return True, f"credentials found via {found[0]}"
-    return False, "no Kaggle credentials found"
+    if os.environ.get("KAGGLE_API_TOKEN"):
+        return True, "KAGGLE_API_TOKEN env var"
+    if os.environ.get("KAGGLE_USERNAME") and os.environ.get("KAGGLE_KEY"):
+        return True, "KAGGLE_USERNAME + KAGGLE_KEY env vars"
+
+    config_dir = kaggle_config_dir()
+    for name in _CREDENTIAL_FILES:
+        if (config_dir / name).exists():
+            return True, f"{config_dir / name}"
+
+    # Any unexpected file in the config dir probably is the credential store
+    # under a name this version does not know about.
+    if config_dir.is_dir():
+        others = [p.name for p in config_dir.iterdir() if p.is_file()]
+        if others:
+            return True, f"{config_dir} contains {', '.join(sorted(others))}"
+
+    return False, f"no credential file found in {config_dir}"

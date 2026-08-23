@@ -118,7 +118,8 @@ def cmd_doctor(args) -> int:
         if not check.ok:
             worst = EXIT_INFRA
 
-    if worst != EXIT_OK:
+    # Only offer auth instructions when auth is actually what failed.
+    if any(not c.ok for c in checks if c.name.startswith("kaggle.")):
         print("")
         print("To fix Kaggle authentication, do ONE of the following yourself")
         print("(the runner will never handle your token):")
