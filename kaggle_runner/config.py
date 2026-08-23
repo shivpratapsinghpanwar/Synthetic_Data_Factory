@@ -36,6 +36,10 @@ class KernelConfig:
     # Kaggle datasets mounted read-only under /kaggle/input/<slug-tail>/.
     # Attaching is free and avoids re-downloading data on every run.
     dataset_sources: list = field(default_factory=list)
+    # Other kernels whose LATEST COMPLETE output mounts read-only under
+    # /kaggle/input/<kernel-slug>/. The native way to pass large artifacts
+    # between sessions without any local round-trip.
+    kernel_sources: list = field(default_factory=list)
 
     @property
     def ref(self) -> str:
@@ -155,11 +159,12 @@ def _validate(cfg: Config) -> None:
         raise ConfigError(
             "[kernel] enable_internet must be true - the kernel git-clones the repo"
         )
-    for src in cfg.kernel.dataset_sources:
-        if not isinstance(src, str) or src.count("/") != 1 or not all(src.split("/")):
-            raise ConfigError(
-                f'[kernel] dataset_sources entries must be "owner/dataset-slug", got: {src!r}'
-            )
+    for field_name in ("dataset_sources", "kernel_sources"):
+        for src in getattr(cfg.kernel, field_name):
+            if not isinstance(src, str) or src.count("/") != 1 or not all(src.split("/")):
+                raise ConfigError(
+                    f'[kernel] {field_name} entries must be "owner/slug", got: {src!r}'
+                )
 
 
 # Credential files the Kaggle CLI is known to use. `credentials.json` is what

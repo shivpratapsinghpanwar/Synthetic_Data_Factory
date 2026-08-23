@@ -224,7 +224,8 @@ def execute(
     return result
 
 
-def collect(cfg: Config, run_id: str, *, slug: str = "", on_event=None) -> dict:
+def collect(cfg: Config, run_id: str, *, slug: str = "", file_pattern: str = "",
+            on_event=None) -> dict:
     """Resume collection for a run whose local process died mid-flight.
 
     Waits for the kernel to reach a terminal state if it is still running,
@@ -261,8 +262,9 @@ def collect(cfg: Config, run_id: str, *, slug: str = "", on_event=None) -> dict:
     if kernel_status == "timeout":
         infra_error = f"kernel did not finish within {cfg.local.poll_timeout_s}s"
 
-    emit("collect", "downloading kernel output")
-    out = kaggle_cli.output(cfg.kernel.ref, paths.output_dir)
+    emit("collect", "downloading kernel output"
+                    + (f" (pattern: {file_pattern})" if file_pattern else ""))
+    out = kaggle_cli.output(cfg.kernel.ref, paths.output_dir, file_pattern=file_pattern)
     if out.returncode != 0 and not infra_error:
         infra_error = f"kernels output failed: {out.combined[-500:]}"
     try:

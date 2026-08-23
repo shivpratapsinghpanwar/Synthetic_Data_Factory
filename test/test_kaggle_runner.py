@@ -141,6 +141,24 @@ def test_dataset_sources_validation():
         raise AssertionError("expected ConfigError for bad dataset source")
 
 
+def test_kernel_sources_flow_into_metadata():
+    cfg = config.load()
+    cfg.kernel.kernel_sources = ["shivpratap0007/sdf-runner"]
+    meta = builder.kernel_metadata(cfg)
+    assert meta["kernel_sources"] == ["shivpratap0007/sdf-runner"]
+
+
+def test_kernel_sources_validation():
+    cfg = config.load()
+    cfg.kernel.kernel_sources = ["bad slug"]
+    try:
+        config._validate(cfg)
+    except config.ConfigError as exc:
+        assert "kernel_sources" in str(exc)
+    else:
+        raise AssertionError("expected ConfigError")
+
+
 def test_kernel_metadata_shape():
     cfg = config.load()
     meta = builder.kernel_metadata(cfg)

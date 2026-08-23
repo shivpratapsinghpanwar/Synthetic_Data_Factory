@@ -112,8 +112,8 @@ def kernel_metadata(cfg: Config) -> dict:
         "enable_gpu": "true" if cfg.kernel.enable_gpu else "false",
         "enable_internet": "true" if cfg.kernel.enable_internet else "false",
         "dataset_sources": list(cfg.kernel.dataset_sources),
+        "kernel_sources": list(cfg.kernel.kernel_sources),
         "competition_sources": [],
-        "kernel_sources": [],
         "model_sources": [],
     }
 

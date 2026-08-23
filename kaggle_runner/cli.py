@@ -32,6 +32,10 @@ def _load(args) -> config.Config:
     if getattr(args, "gpu", None):
         cfg.kernel.enable_gpu = True
         cfg.kernel.accelerator = args.gpu
+    if getattr(args, "kernel_source", None):
+        cfg.kernel.kernel_sources = list(
+            dict.fromkeys(cfg.kernel.kernel_sources + args.kernel_source)
+        )
     if getattr(args, "slug", None):
         # A second kernel lets long sessions run (or queue) in parallel
         # without a new push cancelling the one in flight.
@@ -187,7 +191,10 @@ def cmd_collect(args) -> int:
         print(f"[{kind}] {detail}", flush=True)
 
     try:
-        result = runner.collect(cfg, args.run_id, slug=args.slug or "", on_event=on_event)
+        result = runner.collect(
+            cfg, args.run_id, slug=args.slug or "",
+            file_pattern=args.pattern or "", on_event=on_event,
+        )
     except runner.PreflightError as exc:
         print(str(exc), file=sys.stderr)
         return EXIT_INFRA
@@ -274,6 +281,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="git push HEAD to origin before running")
     run_p.add_argument("--timeout", type=int, help="kernel time limit in seconds")
     run_p.add_argument("--slug", help="override the kernel slug (parallel sessions)")
+    run_p.add_argument(
+        "--kernel-source", action="append", metavar="OWNER/KERNEL",
+        help="mount another kernel's latest output under /kaggle/input/<kernel> (repeatable)",
+    )
     run_p.add_argument("--gpu", metavar="ACCELERATOR",
                        help='opt in to GPU, e.g. "NvidiaTeslaT4" (off by default)')
     run_p.add_argument("--json", action="store_true", help="print the summary as JSON")
@@ -302,6 +313,7 @@ def build_parser() -> argparse.ArgumentParser:
     common(col_p)
     col_p.add_argument("run_id", help="the runs/<id> directory to complete")
     col_p.add_argument("--slug", help="kernel slug the run executed on (if not the default)")
+    col_p.add_argument("--pattern", help="only download files matching this regex")
     col_p.add_argument("--json", action="store_true")
     col_p.set_defaults(func=cmd_collect)
 
