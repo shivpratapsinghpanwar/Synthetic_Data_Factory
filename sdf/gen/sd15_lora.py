@@ -247,6 +247,13 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
     guidance = float(opts.get("guidance", gen.guidance))
     resolution = int(opts.get("resolution", gen.resolution))
     base_seed = int(opts.get("seed", cfg.splits.seed))
+    # LCM-LoRA: training-free inference accelerator (arXiv 2311.05556). Stacks
+    # on top of the content LoRA and cuts sampling to 4-8 steps at guidance
+    # 1-2, multiplying images/GPU-hour ~5-8x. Opt-in: --opt lcm=1.
+    use_lcm = bool(int(opts.get("lcm", 0)))
+    if use_lcm:
+        steps = int(opts.get("sample_steps", 6))
+        guidance = float(opts.get("guidance", 1.5))
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
     dtype = torch.float16 if device == "cuda" else torch.float32
@@ -259,6 +266,12 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
     )
     merged = PeftModel.from_pretrained(pipe.unet, str(adapter_dir)).merge_and_unload()
     pipe.unet = merged
+    if use_lcm:
+        from diffusers import LCMScheduler
+
+        pipe.load_lora_weights("latent-consistency/lcm-lora-sdv1-5")
+        pipe.fuse_lora()
+        pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
     pipe = pipe.to(device)
     pipe.set_progress_bar_config(disable=True)
 
@@ -293,6 +306,7 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
                 "guidance": guidance,
                 "sample_steps": steps,
                 "resolution": resolution,
+                "lcm": use_lcm,
             }
         )
         if (i + 1) % 10 == 0 or i + 1 == count:

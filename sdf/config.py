@@ -111,9 +111,9 @@ def validate(cfg: PipelineConfig) -> None:
             raise ConfigError(f"[generator] {name} must be positive")
     if not (0 < g.lr < 1):
         raise ConfigError("[generator] lr must be in (0, 1)")
-    if g.backend not in ("sd15_lora", "ddpm"):
+    if g.backend not in ("sd15_lora", "ddpm", "sdxl_lora"):
         raise ConfigError(
-            f"[generator] unknown backend {g.backend!r} (sd15_lora, ddpm)"
+            f"[generator] unknown backend {g.backend!r} (sd15_lora, ddpm, sdxl_lora)"
         )
     if cfg.dataset.kaggle_slug.count("/") != 1:
         raise ConfigError('[dataset] kaggle_slug must be "owner/dataset-slug"')

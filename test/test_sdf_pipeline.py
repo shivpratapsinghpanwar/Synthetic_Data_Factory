@@ -615,7 +615,7 @@ def test_report_renders_aggregate(tmp_path):
 def test_backend_registry():
     from sdf.gen import BackendError, get_backend
 
-    for name in ("sd15_lora", "ddpm"):
+    for name in ("sd15_lora", "ddpm", "sdxl_lora"):
         backend = get_backend(name)
         assert hasattr(backend, "train")
         assert hasattr(backend, "sample")

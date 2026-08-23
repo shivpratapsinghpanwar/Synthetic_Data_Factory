@@ -11,9 +11,9 @@ class BackendError(RuntimeError):
 def get_backend(name: str):
     """Resolve a backend module by name. Each backend exposes train(), sample()
     and ADAPTER_DIR_NAME with identical signatures."""
-    from . import ddpm, sd15_lora
+    from . import ddpm, sd15_lora, sdxl_lora
 
-    backends = {"sd15_lora": sd15_lora, "ddpm": ddpm}
+    backends = {"sd15_lora": sd15_lora, "ddpm": ddpm, "sdxl_lora": sdxl_lora}
     try:
         return backends[name]
     except KeyError:
