@@ -115,6 +115,33 @@ def test_imagechd_patient_level_split(tmp_path):
     assert stats["warnings"]
 
 
+def test_imagechd_cache_first_needs_no_archive(tmp_path):
+    """A published slice cache (index.csv + PNGs) must be usable with no
+    NIfTI archive present at all - that is how GPU sessions consume the
+    audit session's output via the artifacts dataset."""
+    from PIL import Image
+
+    cache = tmp_path / "cache" / "imagechd_slices"
+    (cache / "2001").mkdir(parents=True)
+    Image.new("RGB", (64, 64), color=(90, 90, 90)).save(cache / "2001" / "2001_z010.png")
+    (cache / "index.csv").write_text(
+        "file,patient,cls\n2001/2001_z010.png,2001,ASD\n", encoding="utf-8"
+    )
+
+    cfg = config.load(REPO_ROOT / "pipeline_chd.toml")
+    cfg.dataset.data_root = str(tmp_path / "nowhere")  # archive root absent
+    os.environ["SDF_CACHE_DIR"] = str(tmp_path / "cache")
+    try:
+        records, report = get_adapter(cfg).index()
+    finally:
+        _cleanup()
+
+    assert report.get("cache_hit") is True
+    assert len(records) == 1
+    assert records[0].cls == "ASD" and records[0].group_id == "2001"
+    assert records[0].exists
+
+
 def _run_all():
     import inspect
     import tempfile

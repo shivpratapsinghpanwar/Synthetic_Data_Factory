@@ -79,20 +79,65 @@ class ImageCHDAdapter(DatasetAdapter):
 
     # -- discovery -----------------------------------------------------------
     def _ensure_extracted(self, root: Path) -> Path:
-        """If the mount serves archive.zip, extract it once to scratch."""
+        """Extract the dataset archive once to scratch if needed.
+
+        The Kaggle mount serves a SPLIT zip: ImageCHD_dataset.z01..z12 plus
+        ImageCHD_dataset.change2zip (the final .zip part, renamed by the
+        author). Python's zipfile cannot read spanned archives; 7z can, given
+        the parts under their proper names. The mount is read-only, so the
+        parts are symlinked into scratch with the .zip name restored.
+        """
         if any(root.rglob("*_image.nii.gz")):
             return root
+
+        scratch = self._scratch_dir()
+        marker = scratch / ".extracted"
+        if marker.exists():
+            return scratch
+
+        parts = sorted(root.glob("*.z[0-9][0-9]"))
+        tail = list(root.glob("*.change2zip")) + list(root.glob("*.zip"))
+        if parts and tail:
+            import shutil as _shutil
+            import subprocess
+
+            scratch.mkdir(parents=True, exist_ok=True)
+            base = tail[0].name.replace(".change2zip", ".zip")
+            link_dir = scratch / "_parts"
+            link_dir.mkdir(exist_ok=True)
+            for part in parts:
+                target = link_dir / part.name
+                if not target.exists():
+                    os.symlink(part, target)
+            zip_head = link_dir / base
+            if not zip_head.exists():
+                os.symlink(tail[0], zip_head)
+
+            seven_zip = _shutil.which("7z") or _shutil.which("7za")
+            if seven_zip is None:
+                raise DataError("7z is required to extract the split archive")
+            print(f"[imagechd] extracting split archive ({len(parts) + 1} parts) "
+                  f"-> {scratch}", flush=True)
+            proc = subprocess.run(
+                [seven_zip, "x", "-y", f"-o{scratch}", str(zip_head)],
+                capture_output=True, text=True,
+            )
+            if proc.returncode != 0:
+                raise DataError(
+                    f"7z extraction failed ({proc.returncode}): "
+                    f"{(proc.stderr or proc.stdout)[-400:]}"
+                )
+            marker.write_text("ok", encoding="utf-8")
+            return scratch
+
         archives = list(root.glob("*.zip")) + list(root.rglob("archive.zip"))
         if not archives:
             return root  # nothing to extract; discovery will fail loudly later
-        scratch = self._scratch_dir()
-        marker = scratch / ".extracted"
-        if not marker.exists():
-            scratch.mkdir(parents=True, exist_ok=True)
-            print(f"[imagechd] extracting {archives[0].name} -> {scratch}", flush=True)
-            with zipfile.ZipFile(archives[0]) as zf:
-                zf.extractall(scratch)
-            marker.write_text("ok", encoding="utf-8")
+        scratch.mkdir(parents=True, exist_ok=True)
+        print(f"[imagechd] extracting {archives[0].name} -> {scratch}", flush=True)
+        with zipfile.ZipFile(archives[0]) as zf:
+            zf.extractall(scratch)
+        marker.write_text("ok", encoding="utf-8")
         return scratch
 
     @staticmethod
@@ -215,7 +260,49 @@ class ImageCHDAdapter(DatasetAdapter):
         return paths
 
     # -- indexing --------------------------------------------------------------
+    def _index_from_cache(self, cache: Path) -> tuple[list[ImageRecord], dict] | None:
+        """A previously materialized cache carries its own label index, so the
+        8GB archive never needs touching again (and the cache can be published
+        as an artifacts-dataset version and attached read-only)."""
+        index_csv = cache / "index.csv"
+        if not index_csv.exists():
+            return None
+        records: list[ImageRecord] = []
+        with index_csv.open(newline="", encoding="utf-8") as fh:
+            for row in csv.DictReader(fh):
+                path = cache / row["file"]
+                records.append(
+                    ImageRecord(
+                        image_id=Path(row["file"]).stem,
+                        path=path,
+                        cls=row["cls"],
+                        group_id=row["patient"],
+                        exists=path.exists(),
+                    )
+                )
+        missing = [r.image_id for r in records if not r.exists]
+        report = {
+            "adapter": self.name,
+            "root": str(cache),
+            "diagnosis_source": str(index_csv),
+            "patients": len({r.group_id for r in records}),
+            "patients_unlabelled": [],
+            "slice_cache": str(cache),
+            "cache_hit": True,
+            "metadata_rows": len(records),
+            "images_on_disk": len(records) - len(missing),
+            "missing_files": len(missing),
+            "missing_sample": missing[:10],
+            "on_disk_not_in_metadata": 0,
+        }
+        return records, report
+
     def index(self) -> tuple[list[ImageRecord], dict]:
+        cache = self._cache_dir()
+        cached = self._index_from_cache(cache)
+        if cached is not None:
+            return cached
+
         root = self._ensure_extracted(self._root())
         pairs = self._find_pairs(root)
         if not pairs:
@@ -225,7 +312,6 @@ class ImageCHDAdapter(DatasetAdapter):
             )
         diagnosis, diagnosis_source = self._load_diagnosis(root)
 
-        cache = self._cache_dir()
         records: list[ImageRecord] = []
         unlabelled: list[str] = []
         for pid, (image_nii, label_nii) in sorted(pairs.items()):
@@ -242,6 +328,15 @@ class ImageCHDAdapter(DatasetAdapter):
                         group_id=pid,
                         exists=True,
                     )
+                )
+
+        # Persist the label index so later sessions go cache-first.
+        with (cache / "index.csv").open("w", newline="", encoding="utf-8") as fh:
+            writer = csv.writer(fh)
+            writer.writerow(["file", "patient", "cls"])
+            for rec in records:
+                writer.writerow(
+                    [rec.path.relative_to(cache).as_posix(), rec.group_id, rec.cls]
                 )
 
         report = {
