@@ -80,8 +80,10 @@ def publish(cfg: Config, run_id: str) -> dict:
         )
         action = "versioned"
     else:
+        # No --private flag exists: datasets are private by default (-u opts
+        # into public, which we never do here).
         res = kaggle_cli.run(
-            "datasets", "create", "-p", str(folder), "--private", "--dir-mode", "zip",
+            "datasets", "create", "-p", str(folder), "--dir-mode", "zip",
             timeout=1800,
         )
         action = "created"
