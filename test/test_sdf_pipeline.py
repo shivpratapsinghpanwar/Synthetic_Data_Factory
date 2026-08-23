@@ -305,6 +305,14 @@ def test_generator_config_validation():
     raise AssertionError("expected ConfigError")
 
 
+def test_torchao_neutralizer_is_noop_without_torchao():
+    """On machines without torchao (control machine, healthy images) the
+    workaround must do nothing and return False."""
+    from sdf.gen.sd15_lora import neutralize_broken_torchao
+
+    assert neutralize_broken_torchao() is False
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect

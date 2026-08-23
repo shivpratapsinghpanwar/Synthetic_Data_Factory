@@ -21,6 +21,50 @@ ADAPTER_DIR_NAME = "adapter"
 REPORT_NAME = "training_report.json"
 
 
+def neutralize_broken_torchao() -> bool:
+    """Work around the Kaggle GPU image shipping torchao 0.10.0.
+
+    peft >= 0.19 probes torchao inside its LoRA layer dispatcher and RAISES
+    ImportError when the installed version is older than it supports - even
+    though we never asked for torchao quantization. If the installed torchao
+    is too old to be usable, patch peft's availability probes to report it as
+    absent, which restores the correct 'no torchao' code path.
+
+    Returns True if a patch was applied. Safe no-op everywhere else.
+    """
+    try:
+        from importlib.metadata import version
+
+        installed = version("torchao")
+    except Exception:
+        return False  # torchao absent - nothing to neutralize
+
+    try:
+        import peft.import_utils as import_utils
+
+        probe = import_utils.is_torchao_available
+        probe()  # healthy installs return bool; broken ones raise ImportError
+        return False
+    except ImportError:
+        pass  # the exact failure we are here to fix
+    except Exception:
+        return False
+
+    patched = False
+    import peft.import_utils as import_utils
+
+    import_utils.is_torchao_available = lambda: False
+    patched = True
+    try:  # the dispatcher imported the symbol into its own namespace
+        import peft.tuners.lora.torchao as lora_torchao
+
+        lora_torchao.is_torchao_available = lambda: False
+    except Exception:
+        pass
+    print(f"[env] neutralized incompatible torchao {installed} for peft", flush=True)
+    return patched
+
+
 # ------------------------------------------------------------------ training
 def train(cfg, records, cls: str, out_dir: Path, opts: dict) -> dict:
     """Fine-tune a LoRA for one class on its train-split records.
@@ -32,6 +76,8 @@ def train(cfg, records, cls: str, out_dir: Path, opts: dict) -> dict:
     from torch.utils.data import DataLoader
 
     from diffusers import AutoencoderKL, DDPMScheduler, UNet2DConditionModel
+
+    neutralize_broken_torchao()
     from peft import LoraConfig, get_peft_model
     from transformers import CLIPTextModel, CLIPTokenizer
 
@@ -184,6 +230,8 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
     (without file writes to the manifest itself - the stage owns that)."""
     import torch
     from diffusers import StableDiffusionPipeline
+
+    neutralize_broken_torchao()
     from peft import PeftModel
 
     gen = cfg.generator
