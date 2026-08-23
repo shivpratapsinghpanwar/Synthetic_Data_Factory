@@ -110,16 +110,27 @@ _STATUS_BARE_RE = re.compile(
     r"\b(complete|error|running|queued|pending|cancelAcknowledged|cancelRequested)\b",
     re.IGNORECASE,
 )
+# kaggle 2.2.x reports the raw enum, e.g. KernelWorkerStatus.COMPLETE. Older
+# versions printed a bare word. Strip any dotted prefix so both normalise the
+# same way - otherwise a finished kernel never looks terminal and the poller
+# spins until it times out.
+_ENUM_PREFIX_RE = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*\.")
+
+
+def normalise_status(value: str) -> str:
+    """``KernelWorkerStatus.COMPLETE`` -> ``complete``; ``Complete`` -> ``complete``."""
+    return _ENUM_PREFIX_RE.sub("", value.strip()).strip().lower()
 
 
 def parse_status(output: str) -> tuple[str, str]:
     """Return ``(normalised_status, raw_text)`` from `kernels status` output.
 
-    Normalised status is lowercase, or ``"unknown"`` when nothing matched.
+    Normalised status is lowercase with any enum prefix removed, or
+    ``"unknown"`` when nothing matched.
     """
     text = output.strip()
     match = _STATUS_RE.search(text) or _STATUS_BARE_RE.search(text)
-    return (match.group(1).lower() if match else "unknown"), text
+    return (normalise_status(match.group(1)) if match else "unknown"), text
 
 
 def status(ref: str) -> tuple[str, str]:

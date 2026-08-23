@@ -148,6 +148,38 @@ def test_parse_status_variants():
         assert state == expected, f"{text!r} -> {state}"
 
 
+def test_parse_status_handles_enum_form():
+    """Regression: kaggle 2.2.x prints the raw enum, not a bare word.
+
+    'KernelWorkerStatus.COMPLETE' lowercased to
+    'kernelworkerstatus.complete', which was not in TERMINAL_OK - so a finished
+    kernel never looked terminal and the poller spun until timeout.
+    """
+    observed = 'shivpratap0007/sdf-runner has status "KernelWorkerStatus.COMPLETE"'
+    state, _ = kaggle_cli.parse_status(observed)
+    assert state == "complete"
+    assert kaggle_cli.is_terminal(state)
+
+    for raw, expected in [
+        ("KernelWorkerStatus.ERROR", "error"),
+        ("KernelWorkerStatus.RUNNING", "running"),
+        ("KernelWorkerStatus.QUEUED", "queued"),
+        ("KernelWorkerStatus.CANCEL_ACKNOWLEDGED", "cancel_acknowledged"),
+        ("COMPLETE", "complete"),
+        ("Complete", "complete"),
+    ]:
+        assert kaggle_cli.normalise_status(raw) == expected, raw
+
+
+def test_enum_terminal_states_are_recognised():
+    for raw in ("KernelWorkerStatus.COMPLETE", "KernelWorkerStatus.ERROR"):
+        state, _ = kaggle_cli.parse_status(f'has status "{raw}"')
+        assert kaggle_cli.is_terminal(state), raw
+    for raw in ("KernelWorkerStatus.RUNNING", "KernelWorkerStatus.QUEUED"):
+        state, _ = kaggle_cli.parse_status(f'has status "{raw}"')
+        assert not kaggle_cli.is_terminal(state), raw
+
+
 def test_terminal_classification():
     assert kaggle_cli.is_terminal("complete")
     assert kaggle_cli.is_terminal("error")

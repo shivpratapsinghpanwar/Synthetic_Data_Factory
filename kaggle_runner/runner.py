@@ -80,23 +80,41 @@ def _make_run_id(commit_short: str) -> str:
     return time.strftime("%Y%m%dT%H%M%SZ", time.gmtime()) + "-" + commit_short
 
 
+# If the CLI's status wording changes again, every poll returns "unknown" and
+# the loop would spin until poll_timeout_s. Bail out early and loudly instead.
+MAX_UNKNOWN_POLLS = 8
+
+
 def _poll(cfg: Config, ref: str, on_tick=None) -> tuple[str, float]:
     """Poll kernel status until terminal. Returns (status, seconds_waited)."""
     started = time.time()
     interval = float(cfg.local.poll_interval_s)
     last = ""
+    unknown_streak = 0
+    last_raw = ""
+
     while True:
         elapsed = time.time() - started
         if elapsed > cfg.local.poll_timeout_s:
             return "timeout", elapsed
 
         state, raw = kaggle_cli.status(ref)
+        last_raw = raw
         if state != last and on_tick:
             on_tick(state, raw)
         last = state
 
         if kaggle_cli.is_terminal(state):
             return state, time.time() - started
+
+        if state == "unknown":
+            unknown_streak += 1
+            if unknown_streak >= MAX_UNKNOWN_POLLS:
+                if on_tick:
+                    on_tick("unparseable", last_raw[:300])
+                return "unknown", time.time() - started
+        else:
+            unknown_streak = 0
 
         time.sleep(interval)
         # Gentle backoff: long jobs should not hammer the API.
