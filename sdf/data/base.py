@@ -44,8 +44,12 @@ def get_adapter(cfg) -> DatasetAdapter:
     """Look up the adapter for ``cfg.dataset.name``."""
     # Imported here to avoid a cycle (adapters import base).
     from .ham10000 import HAM10000Adapter
+    from .imagechd import ImageCHDAdapter
 
-    adapters = {HAM10000Adapter.name: HAM10000Adapter}
+    adapters = {
+        HAM10000Adapter.name: HAM10000Adapter,
+        ImageCHDAdapter.name: ImageCHDAdapter,
+    }
     try:
         return adapters[cfg.dataset.name](cfg)
     except KeyError:

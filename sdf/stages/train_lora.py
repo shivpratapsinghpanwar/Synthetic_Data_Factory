@@ -12,7 +12,6 @@ from pathlib import Path
 from ..config import PipelineConfig, output_dir
 from ..data.base import DataError, get_adapter
 from ..gen import BackendError, get_backend
-from ..gen.prompts import CLASS_PROMPTS
 from ..splits import grouped_stratified_split
 from .base import StageResult
 
@@ -21,19 +20,22 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     started = time.time()
     opts = opts or {}
     cls = str(opts.get("cls", ""))
-    if cls not in CLASS_PROMPTS:
-        return StageResult(
-            stage="train_lora",
-            success=False,
-            error=f"pass --opt cls=<class>; got {cls!r}, known: {sorted(CLASS_PROMPTS)}",
-            duration_s=round(time.time() - started, 2),
-        )
 
     try:
         records, _report = get_adapter(cfg).index()
     except DataError as exc:
         return StageResult(
             stage="train_lora", success=False, error=str(exc),
+            duration_s=round(time.time() - started, 2),
+        )
+
+    # Class validity comes from the dataset itself, not a hardcoded list -
+    # every adapter defines its own label vocabulary.
+    known = sorted({r.cls for r in records})
+    if cls not in known:
+        return StageResult(
+            stage="train_lora", success=False,
+            error=f"pass --opt cls=<class>; got {cls!r}, dataset has: {known}",
             duration_s=round(time.time() - started, 2),
         )
 

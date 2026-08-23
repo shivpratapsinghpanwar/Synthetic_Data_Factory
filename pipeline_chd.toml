@@ -1,0 +1,31 @@
+# Pipeline configuration for the ImageCHD vertical slice (pediatric congenital
+# heart disease CT). Use with:  python -m sdf run-stage <stage> --config pipeline_chd.toml
+#
+# Dataset: 110 pediatric CT volumes, MICCAI 2020, hosted on Kaggle by the
+# original author (Apache-2.0). No identifiable data - the defensible pediatric
+# anomaly target. Generator: from-scratch DDPM (no natural-image prior).
+
+[dataset]
+name = "imagechd"
+kaggle_slug = "xiaoweixumedicalai/imagechd"
+data_root = ""
+
+[splits]
+seed = 20260823
+val_frac = 0.10
+test_frac = 0.15
+# group_id is the patient id -> patient-level separation is automatic.
+group_key = "patient"
+
+[generator]
+backend = "ddpm"
+base_model = "from-scratch"
+resolution = 256
+rare_class_max_count = 600
+train_steps = 4000
+lr = 1e-4
+batch_size = 16
+grad_accum = 1
+sample_count = 100
+sample_steps = 60
+guidance = 1.0

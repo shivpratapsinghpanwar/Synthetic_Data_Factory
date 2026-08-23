@@ -259,12 +259,14 @@ def test_cli_opt_coercion():
     assert _coerce("df") == "df"
 
 
-def test_train_lora_requires_cls():
+def test_train_lora_requires_valid_cls(tmp_path):
+    """Class validity now comes from the dataset itself, not a hardcoded list."""
     from sdf.stages import train_lora
 
-    result = train_lora.run(config.load(), {})
+    build_fixture(tmp_path)
+    result = train_lora.run(fixture_cfg(tmp_path), {"cls": "not-a-class"})
     assert not result.success
-    assert "cls" in result.error
+    assert "dataset has" in result.error and "df" in result.error
 
 
 def test_sample_requires_adapter(tmp_path, monkeypatch=None):

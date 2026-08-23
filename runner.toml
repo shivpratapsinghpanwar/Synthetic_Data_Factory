@@ -30,7 +30,8 @@ accelerator = ""
 timeout_s = 1800
 # Kaggle datasets to mount read-only under /kaggle/input/. Attaching is free.
 dataset_sources = [
-    "kmader/skin-cancer-mnist-ham10000",        # real dataset (read-only)
+    "kmader/skin-cancer-mnist-ham10000",        # skin lesions (modality 1)
+    "xiaoweixumedicalai/imagechd",              # pediatric CHD CT (modality 2)
     "shivpratap0007/sdf-runner-artifacts",      # trained adapters + synthetic images (latest version)
 ]
 

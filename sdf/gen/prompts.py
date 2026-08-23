@@ -56,5 +56,6 @@ def prompt_for(cls: str) -> str:
         return CLASS_PROMPTS[cls][1]
     except KeyError:
         raise PromptError(
-            f"no prompt for class {cls!r}; known: {sorted(CLASS_PROMPTS)}"
+            f"no prompt defined for class {cls!r} (SD backends need one; "
+            f"known: {sorted(CLASS_PROMPTS)}). The ddpm backend needs no prompt."
         ) from None

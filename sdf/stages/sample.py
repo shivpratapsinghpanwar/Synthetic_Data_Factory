@@ -14,7 +14,6 @@ from pathlib import Path
 from .. import manifest
 from ..config import PipelineConfig, output_dir
 from ..gen import BackendError, get_backend
-from ..gen.prompts import CLASS_PROMPTS
 from .base import StageResult
 
 MANIFEST_NAME = "synthetic_manifest.jsonl"
@@ -24,10 +23,10 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     started = time.time()
     opts = opts or {}
     cls = str(opts.get("cls", ""))
-    if cls not in CLASS_PROMPTS:
+    if not cls:
         return StageResult(
             stage="sample", success=False,
-            error=f"pass --opt cls=<class>; got {cls!r}, known: {sorted(CLASS_PROMPTS)}",
+            error="pass --opt cls=<class>",
             duration_s=round(time.time() - started, 2),
         )
 

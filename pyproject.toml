@@ -14,7 +14,9 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "nibabel>=5.4.2",
     "numpy>=2.4.6",
+    "pandas>=3.0.5",
     "pytest>=8",
 ]
 

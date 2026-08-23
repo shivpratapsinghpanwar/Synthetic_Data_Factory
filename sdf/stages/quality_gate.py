@@ -15,7 +15,6 @@ from pathlib import Path
 from .. import quality
 from ..config import PipelineConfig, output_dir
 from ..data.base import DataError, get_adapter
-from ..gen.prompts import CLASS_PROMPTS
 from ..splits import grouped_stratified_split
 from .base import StageResult
 
@@ -24,10 +23,10 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     started = time.time()
     opts = opts or {}
     cls = str(opts.get("cls", ""))
-    if cls not in CLASS_PROMPTS:
+    if not cls:
         return StageResult(
             stage="quality_gate", success=False,
-            error=f"pass --opt cls=<class>; got {cls!r}, known: {sorted(CLASS_PROMPTS)}",
+            error="pass --opt cls=<class>",
             duration_s=round(time.time() - started, 2),
         )
 
