@@ -562,6 +562,56 @@ def test_evaluate_rejects_malformed_pairs():
     assert "baseline:treatment" in result.error
 
 
+def test_report_renders_aggregate(tmp_path):
+    import json as _json
+
+    from sdf import report
+
+    payload = {
+        "metrics": {
+            "test_n": 1508,
+            "arms": {
+                "real_only_s1": {
+                    "macro_f1": 0.73, "accuracy": 0.84,
+                    "train_sources": {"real": 7499, "synthetic": 0},
+                    "per_class": {},
+                },
+                "augmented_s1": {
+                    "macro_f1": 0.74, "accuracy": 0.85,
+                    "train_sources": {"real": 7499, "synthetic": 400},
+                    "per_class": {},
+                },
+            },
+            "aggregate": {
+                "n_pairs": 3,
+                "summary": {
+                    "macro_f1_delta": {"mean": 0.012, "std": 0.004, "values": [0.01, 0.012, 0.014]},
+                    "accuracy_delta": {"mean": -0.001, "std": 0.002, "values": [0.0, -0.003, 0.0]},
+                },
+                "per_class": {
+                    "df": {
+                        "recall_delta": {"mean": 0.0588, "std": 0.03, "values": [0.06, 0.03, 0.09]},
+                        "f1_delta": {"mean": 0.04, "std": 0.02, "values": [0.04, 0.02, 0.06]},
+                    },
+                    "nv": {
+                        "recall_delta": {"mean": 0.001, "std": 0.001, "values": [0.0, 0.001, 0.002]},
+                        "f1_delta": {"mean": 0.0, "std": 0.001, "values": [0.0, 0.0, 0.0]},
+                    },
+                },
+            },
+        },
+    }
+    src = tmp_path / "stage_evaluate.json"
+    src.write_text(_json.dumps(payload), encoding="utf-8")
+    out = report.build_report(src, tmp_path / "results.md", context={"commit": "abc123"})
+    text = out.read_text(encoding="utf-8")
+    assert "+0.0120" in text          # signed mean
+    assert "3 seed(s)" in text
+    assert "| df | **yes** |" in text  # rare-class marking
+    assert "| nv | no |" in text
+    assert "abc123" in text
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect

@@ -69,6 +69,25 @@ def _coerce(value: str):
     return value
 
 
+def cmd_report(args) -> int:
+    from pathlib import Path as _P
+
+    from . import report
+
+    src = _P(args.evaluate_json)
+    if not src.exists():
+        print(f"not found: {src}", file=sys.stderr)
+        return 2
+    context = {}
+    if args.run_id:
+        context["run"] = args.run_id
+    if args.commit:
+        context["commit"] = args.commit
+    out = report.build_report(src, _P(args.out), context=context)
+    print(f"wrote {out}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="sdf", description="Synthetic Data Factory pipeline."
@@ -89,6 +108,13 @@ def build_parser() -> argparse.ArgumentParser:
         help="stage option (repeatable), e.g. --opt cls=df --opt steps=40",
     )
     run_p.set_defaults(func=cmd_run_stage)
+
+    rep_p = sub.add_parser("report", help="render an evaluate result to markdown")
+    rep_p.add_argument("evaluate_json", help="path to a stage_evaluate*.json")
+    rep_p.add_argument("--out", default="docs/results.md")
+    rep_p.add_argument("--run-id", default="", help="run id for provenance context")
+    rep_p.add_argument("--commit", default="", help="commit for provenance context")
+    rep_p.set_defaults(func=cmd_report)
 
     return parser
 
