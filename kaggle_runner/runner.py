@@ -224,6 +224,67 @@ def execute(
     return result
 
 
+def collect(cfg: Config, run_id: str, *, slug: str = "", on_event=None) -> dict:
+    """Resume collection for a run whose local process died mid-flight.
+
+    Waits for the kernel to reach a terminal state if it is still running,
+    then downloads output, fetches logs and writes the summary - identical to
+    the tail of execute(). The commit is recovered from the run id suffix.
+    """
+    emit = on_event or (lambda *_: None)
+    wall_start = time.time()
+    if slug:
+        cfg.kernel.slug = slug
+
+    paths = summary.RunPaths.for_run(cfg.runs_path, run_id)
+    if not paths.run_dir.is_dir():
+        raise PreflightError(f"unknown run id: {run_id}")
+    paths.output_dir.mkdir(parents=True, exist_ok=True)
+
+    # The run id embeds the short sha (<stamp>-<short>); resolve it locally.
+    short = run_id.rsplit("-", 1)[-1]
+    git_state = gitctl.inspect()
+    if not git_state.commit.startswith(short):
+        resolved = gitctl._git("rev-parse", short, check=False)
+        if resolved:
+            from dataclasses import replace
+
+            git_state = replace(
+                git_state, commit=resolved, short=resolved[:9],
+                subject=gitctl._git("log", "-1", "--pretty=%s", check=False) or "",
+            )
+
+    emit("status", f"waiting for {cfg.kernel.ref} to finish")
+    kernel_status, queue_s = _poll(cfg, cfg.kernel.ref,
+                                   on_tick=lambda st, _r: emit("status", st))
+    infra_error = ""
+    if kernel_status == "timeout":
+        infra_error = f"kernel did not finish within {cfg.local.poll_timeout_s}s"
+
+    emit("collect", "downloading kernel output")
+    out = kaggle_cli.output(cfg.kernel.ref, paths.output_dir)
+    if out.returncode != 0 and not infra_error:
+        infra_error = f"kernels output failed: {out.combined[-500:]}"
+    try:
+        console = kaggle_cli.logs(cfg.kernel.ref)
+        if console:
+            paths.kaggle_log.write_text(console, encoding="utf-8", errors="replace")
+    except kaggle_cli.KaggleCliError:
+        pass
+
+    kernel_result = summary.load_kernel_result(paths)
+    result = summary.build(
+        run_id=run_id, cfg=cfg, git_state=git_state,
+        kernel_status=kernel_status, kernel_version=None,
+        kernel_result=kernel_result, paths=paths,
+        wall_s=time.time() - wall_start, queue_s=queue_s,
+        infra_error=infra_error,
+    )
+    paths.result_json.write_text(json.dumps(result, indent=2), encoding="utf-8")
+    _write_latest_pointer(cfg.runs_path, run_id, result)
+    return result
+
+
 def _write_latest_pointer(runs_root: Path, run_id: str, result: dict) -> None:
     """A stable path an automation loop can always read: runs/latest.json."""
     runs_root.mkdir(parents=True, exist_ok=True)

@@ -174,6 +174,31 @@ def cmd_result(args) -> int:
     return EXIT_OK if result["success"] else EXIT_RUN_FAILED
 
 
+# ----------------------------------------------------------------------- collect
+def cmd_collect(args) -> int:
+    """Resume collection for a run whose local process died mid-flight."""
+    try:
+        cfg = _load(args)
+    except config.ConfigError as exc:
+        print(f"config error: {exc}", file=sys.stderr)
+        return EXIT_INFRA
+
+    def on_event(kind: str, detail: str) -> None:
+        print(f"[{kind}] {detail}", flush=True)
+
+    try:
+        result = runner.collect(cfg, args.run_id, slug=args.slug or "", on_event=on_event)
+    except runner.PreflightError as exc:
+        print(str(exc), file=sys.stderr)
+        return EXIT_INFRA
+    except kaggle_cli.KaggleCliError as exc:
+        print(f"kaggle cli error: {exc}", file=sys.stderr)
+        return EXIT_INFRA
+
+    _print_summary(result, args.json)
+    return EXIT_OK if result["success"] else EXIT_RUN_FAILED
+
+
 # ----------------------------------------------------------------------- publish
 def cmd_publish(args) -> int:
     """Publish a run's output as a version of the private artifacts dataset."""
@@ -270,6 +295,15 @@ def build_parser() -> argparse.ArgumentParser:
     res_p.add_argument("run_id", nargs="?", help="defaults to the latest run")
     res_p.add_argument("--json", action="store_true")
     res_p.set_defaults(func=cmd_result)
+
+    col_p = sub.add_parser(
+        "collect", help="resume collection for a run whose local process died"
+    )
+    common(col_p)
+    col_p.add_argument("run_id", help="the runs/<id> directory to complete")
+    col_p.add_argument("--slug", help="kernel slug the run executed on (if not the default)")
+    col_p.add_argument("--json", action="store_true")
+    col_p.set_defaults(func=cmd_collect)
 
     pub_p = sub.add_parser(
         "publish", help="upload a run's output as a private Kaggle dataset version"
