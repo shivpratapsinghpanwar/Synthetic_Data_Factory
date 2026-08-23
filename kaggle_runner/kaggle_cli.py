@@ -149,9 +149,14 @@ def is_terminal(state: str) -> bool:
 
 
 def output(ref: str, dest: Path, file_pattern: str = "") -> CliResult:
-    """Download kernel output files into ``dest``."""
+    """Download kernel output files into ``dest``.
+
+    No -o/--force: each run gets a unique directory, so a partial download can
+    resume by skipping files already fetched - killed transfers of large
+    outputs (thousands of slice PNGs) just continue where they stopped.
+    """
     dest.mkdir(parents=True, exist_ok=True)
-    args = ["kernels", "output", ref, "-p", str(dest), "-o", "-q"]
+    args = ["kernels", "output", ref, "-p", str(dest), "-q"]
     if file_pattern:
         args += ["--file-pattern", file_pattern]
     return run(*args, check=False, timeout=1800)
