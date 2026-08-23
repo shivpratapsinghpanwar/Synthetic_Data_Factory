@@ -32,6 +32,11 @@ def _load(args) -> config.Config:
     if getattr(args, "gpu", None):
         cfg.kernel.enable_gpu = True
         cfg.kernel.accelerator = args.gpu
+    if getattr(args, "slug", None):
+        # A second kernel lets long sessions run (or queue) in parallel
+        # without a new push cancelling the one in flight.
+        cfg.kernel.slug = args.slug
+        cfg.kernel.title = args.slug
     return cfg
 
 
@@ -243,6 +248,7 @@ def build_parser() -> argparse.ArgumentParser:
     run_p.add_argument("--push", action="store_true",
                        help="git push HEAD to origin before running")
     run_p.add_argument("--timeout", type=int, help="kernel time limit in seconds")
+    run_p.add_argument("--slug", help="override the kernel slug (parallel sessions)")
     run_p.add_argument("--gpu", metavar="ACCELERATOR",
                        help='opt in to GPU, e.g. "NvidiaTeslaT4" (off by default)')
     run_p.add_argument("--json", action="store_true", help="print the summary as JSON")
