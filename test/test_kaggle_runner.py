@@ -489,13 +489,11 @@ def test_publish_merge_concatenates_manifests_and_keeps_stage_jsons(tmp_path):
     cfg = config.load()
     a = tmp_path / "a"
     a.mkdir()
-    (a / "synthetic_manifest.jsonl").write_text('{"cls": "df"}
-', encoding="utf-8")
+    (a / "synthetic_manifest.jsonl").write_text('{"cls": "df"}\n', encoding="utf-8")
     (a / "stage_quality_gate.json").write_text('{"cls": "df"}', encoding="utf-8")
     b = tmp_path / "b"
     b.mkdir()
-    (b / "synthetic_manifest.jsonl").write_text('{"cls": "vasc"}
-', encoding="utf-8")
+    (b / "synthetic_manifest.jsonl").write_text('{"cls": "vasc"}\n', encoding="utf-8")
     (b / "stage_quality_gate.json").write_text('{"cls": "bcc"}', encoding="utf-8")
 
     import kaggle_runner.artifacts as art
