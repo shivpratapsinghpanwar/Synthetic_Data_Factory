@@ -32,16 +32,20 @@ MANIFEST_NAME = "synthetic_manifest.jsonl"
 
 
 def _flagged_images(syn_root: Path) -> set[str]:
-    """Images the quality gate flagged as memorized - excluded from training."""
-    gate = syn_root / "stage_quality_gate.json"
-    if not gate.exists():
-        return set()
-    try:
-        data = json.loads(gate.read_text(encoding="utf-8"))
-        flagged = data.get("metrics", {}).get("memorization", {}).get("flagged", [])
-        return {f["image"] for f in flagged}
-    except (json.JSONDecodeError, KeyError, TypeError):
-        return set()
+    """Images any quality gate flagged as memorized - excluded from training.
+
+    Gates write stage_quality_gate_<cls>.json (one per class); the union of
+    all flags applies. The unsuffixed legacy name is matched by the glob too.
+    """
+    flagged: set[str] = set()
+    for gate in sorted(syn_root.glob("stage_quality_gate*.json")):
+        try:
+            data = json.loads(gate.read_text(encoding="utf-8"))
+            entries = data.get("metrics", {}).get("memorization", {}).get("flagged", [])
+            flagged.update(f["image"] for f in entries)
+        except (json.JSONDecodeError, KeyError, TypeError):
+            continue
+    return flagged
 
 
 def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:

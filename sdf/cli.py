@@ -48,7 +48,8 @@ def cmd_run_stage(args) -> int:
         opts[key.strip()] = _coerce(value.strip())
 
     result = stage_fn(cfg, opts)
-    path = write_result(result)
+    suffix = str(opts.get("cls") or opts.get("tag") or "")
+    path = write_result(result, suffix=suffix)
 
     print(f"[stage] {result.stage}: {'PASS' if result.success else 'FAIL'} "
           f"({result.duration_s}s) -> {path}")

@@ -185,9 +185,9 @@ def cmd_publish(args) -> int:
         print(f"config error: {exc}", file=sys.stderr)
         return EXIT_INFRA
 
-    run_id = args.run_id or (cfg.runs_path / "latest.txt").read_text().strip()
+    run_ids = args.run_id or [(cfg.runs_path / "latest.txt").read_text().strip()]
     try:
-        result = artifacts.publish(cfg, run_id)
+        result = artifacts.publish(cfg, run_ids)
     except (artifacts.PublishError, kaggle_cli.KaggleCliError) as exc:
         print(f"publish failed: {exc}", file=sys.stderr)
         return EXIT_INFRA
@@ -275,7 +275,10 @@ def build_parser() -> argparse.ArgumentParser:
         "publish", help="upload a run's output as a private Kaggle dataset version"
     )
     common(pub_p)
-    pub_p.add_argument("run_id", nargs="?", help="defaults to the latest run")
+    pub_p.add_argument(
+        "run_id", nargs="*",
+        help="one or more run ids to merge (later wins); defaults to the latest run",
+    )
     pub_p.set_defaults(func=cmd_publish)
 
     log_p = sub.add_parser("logs", help="show part of a stored full log")

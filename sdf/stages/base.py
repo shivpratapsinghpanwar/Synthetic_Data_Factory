@@ -27,9 +27,15 @@ class StageResult:
         return asdict(self)
 
 
-def write_result(result: StageResult, dest: Path | None = None) -> Path:
+def write_result(
+    result: StageResult, dest: Path | None = None, suffix: str = ""
+) -> Path:
+    """Write stage_<name>[_<suffix>].json. The suffix (usually the class)
+    keeps repeated invocations of one stage in a single session from
+    overwriting each other's results."""
     folder = dest or output_dir()
     folder.mkdir(parents=True, exist_ok=True)
-    path = folder / f"stage_{result.stage}.json"
+    name = f"stage_{result.stage}_{suffix}.json" if suffix else f"stage_{result.stage}.json"
+    path = folder / name
     path.write_text(json.dumps(result.as_dict(), indent=2, sort_keys=True), encoding="utf-8")
     return path

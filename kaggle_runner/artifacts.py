@@ -44,24 +44,28 @@ def dataset_exists(slug: str) -> bool:
     return False
 
 
-def stage_folder(cfg: Config, run_id: str, source: Path) -> Path:
-    """Copy a run's output into a staging folder with dataset-metadata.json."""
-    if not source.is_dir():
-        raise PublishError(f"nothing to publish: {source} is not a directory")
+def stage_folder(cfg: Config, run_ids: list[str], sources: list[Path]) -> Path:
+    """Merge one or more runs' outputs into a staging folder (later runs win
+    on file collisions) and add dataset-metadata.json."""
+    for source in sources:
+        if not source.is_dir():
+            raise PublishError(f"nothing to publish: {source} is not a directory")
 
     slug = dataset_slug(cfg)
-    folder = STAGING_DIR / run_id
+    folder = STAGING_DIR / "+".join(run_ids)[:80]
     if folder.exists():
         shutil.rmtree(folder)
     folder.mkdir(parents=True)
 
-    # One run per version: Kaggle flattens the upload server-side, so nesting
-    # under the run id would not survive anyway. copy content to staging root.
-    for item in source.iterdir():
-        if item.is_dir():
-            shutil.copytree(item, folder / item.name)
-        else:
-            shutil.copy2(item, folder / item.name)
+    # Content sits at the staging root: Kaggle flattens zip-mode uploads
+    # server-side, so per-run nesting would not survive anyway.
+    for source in sources:
+        for item in source.rglob("*"):
+            if item.is_file():
+                rel = item.relative_to(source)
+                target = folder / rel
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(item, target)
 
     (folder / "dataset-metadata.json").write_text(
         json.dumps(
@@ -77,11 +81,19 @@ def stage_folder(cfg: Config, run_id: str, source: Path) -> Path:
     return folder
 
 
-def publish(cfg: Config, run_id: str) -> dict:
-    """Create-or-version the artifacts dataset from runs/<run_id>/output."""
-    source = cfg.runs_path / run_id / "output"
-    folder = stage_folder(cfg, run_id, source)
+def publish(cfg: Config, run_ids: list[str] | str) -> dict:
+    """Create-or-version the artifacts dataset from one or more runs' output.
+
+    Multiple run ids merge into one version (later wins on collisions) so a
+    single attachable version can carry every class even when classes were
+    generated in separate sessions.
+    """
+    if isinstance(run_ids, str):
+        run_ids = [run_ids]
+    sources = [cfg.runs_path / rid / "output" for rid in run_ids]
+    folder = stage_folder(cfg, run_ids, sources)
     slug = dataset_slug(cfg)
+    run_id = "+".join(run_ids)
 
     if dataset_exists(slug):
         res = kaggle_cli.run(

@@ -435,7 +435,7 @@ def test_publish_staging_layout(tmp_path):
     original = art.STAGING_DIR
     art.STAGING_DIR = tmp_path / "staging"
     try:
-        folder = artifacts.stage_folder(cfg, "run123", src)
+        folder = artifacts.stage_folder(cfg, ["run123"], [src])
     finally:
         art.STAGING_DIR = original
 
@@ -450,10 +450,37 @@ def test_publish_refuses_missing_source(tmp_path):
     from kaggle_runner import artifacts
 
     try:
-        artifacts.stage_folder(config.load(), "runX", tmp_path / "absent")
+        artifacts.stage_folder(config.load(), ["runX"], [tmp_path / "absent"])
     except artifacts.PublishError:
         return
     raise AssertionError("expected PublishError")
+
+
+def test_publish_merges_multiple_runs(tmp_path):
+    from kaggle_runner import artifacts
+
+    cfg = config.load()
+    a = tmp_path / "a"
+    (a / "synthetic" / "df").mkdir(parents=True)
+    (a / "synthetic" / "df" / "x.png").write_bytes(b"df")
+    (a / "shared.json").write_text("from-a", encoding="utf-8")
+    b = tmp_path / "b"
+    (b / "synthetic" / "vasc").mkdir(parents=True)
+    (b / "synthetic" / "vasc" / "y.png").write_bytes(b"vasc")
+    (b / "shared.json").write_text("from-b", encoding="utf-8")
+
+    import kaggle_runner.artifacts as art
+    original = art.STAGING_DIR
+    art.STAGING_DIR = tmp_path / "staging"
+    try:
+        folder = artifacts.stage_folder(cfg, ["runA", "runB"], [a, b])
+    finally:
+        art.STAGING_DIR = original
+
+    assert (folder / "synthetic" / "df" / "x.png").exists()
+    assert (folder / "synthetic" / "vasc" / "y.png").exists()
+    # later run wins on collisions
+    assert (folder / "shared.json").read_text(encoding="utf-8") == "from-b"
 
 
 # ------------------------------------------------------------------ fallback
