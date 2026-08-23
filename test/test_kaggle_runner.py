@@ -154,7 +154,23 @@ def test_extract_error_without_traceback():
     bs = _bootstrap_module()
     err = bs.extract_error(["all good", "fatal: repository not found", ""])
     assert "repository not found" in err["message"]
-    assert err["traceback"] == ""
+
+
+def test_extract_error_keeps_context_for_split_messages():
+    """A reverse scan can land on a continuation line; context must survive.
+
+    Real case: cmd.exe splits "'X' is not recognized as an internal or external
+    command, / operable program or batch file." across two lines, and only the
+    second one is matched last.
+    """
+    bs = _bootstrap_module()
+    err = bs.extract_error([
+        "$ SDF_SMOKE_FAIL=1 python job.py",
+        "'SDF_SMOKE_FAIL' is not recognized as an internal or external command,",
+        "operable program or batch file.",
+        "[exit 1]",
+    ])
+    assert "SDF_SMOKE_FAIL" in err["traceback"], err
 
 
 def test_extract_error_non_python_failures():

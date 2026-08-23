@@ -168,9 +168,18 @@ def extract_error(lines):
         for line in lines
         if line.strip() and not _NOISE.match(line.strip())
     ]
-    for line in reversed(candidates):
+    for offset, line in enumerate(reversed(candidates)):
         if _ERROR_HINT.search(line):
-            return {"type": "", "message": line[:1000], "traceback": ""}
+            # Multi-line messages (shell errors, C++ aborts) get split across
+            # lines, and a reverse scan can land on a continuation fragment.
+            # Carry surrounding context so the caller sees the whole message.
+            idx = len(candidates) - 1 - offset
+            context = candidates[max(0, idx - 3): idx + 2]
+            return {
+                "type": "",
+                "message": line[:1000],
+                "traceback": "\n".join(context)[-TB_MAX_CHARS:],
+            }
 
     # Still nothing conclusive: return the tail so the caller is not left blind.
     if candidates:
