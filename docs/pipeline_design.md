@@ -122,8 +122,17 @@ macro metrics. FID is tracked as a diagnostic, not a goal.
 - **M3 — quality gate** ✅ ran in-session on Kaggle: 0 flat, 0 duplicates,
   0 memorization flags (max cosine similarity 0.852 vs threshold 0.985);
   FID 328 vs the 12-image df val set, correctly marked unstable
-- **M4 — full generation** all rare classes to `target_per_class`
-- **M5 — the number** detector A/B, rare-class delta reported
-  (first single-seed A/B with df-only augmentation = pipeline validation;
-  the citable claim needs all rare classes and >= 3 seeds)
+- **M4 — full generation** ✅ all four rare classes at 100 gated images each
+  (400 total). Per-class gates: 0 memorization flags everywhere (max cosine
+  similarity: df 0.852, vasc 0.865, akiec 0.862, bcc 0.907 vs threshold
+  0.985); FID 221-328, all marked unstable (small val references) - tracked
+  as diagnostic. Merged into one artifacts-dataset version (manifests
+  concatenate on merge; a later-wins policy would have silently dropped a
+  run's rows).
+- **M5 — the number** detector A/B, rare-class delta reported.
+  Single-seed df-only pilot (run 20260823T105736Z): acc +1.4pt, macro-F1
+  +0.4pt, df recall moved by exactly one test image (n=17) - noise-dominated,
+  as predicted; treated strictly as pipeline validation. The claimable
+  experiment (3 seeds x 2 arms, all rare classes augmented, paired
+  mean +/- std deltas) runs via evaluate's `pairs` mode.
 - **M6 — scale out** second modality via adapter; second backend if warranted
