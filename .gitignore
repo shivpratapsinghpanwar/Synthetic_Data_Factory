@@ -2,6 +2,9 @@
 # Client/hospital-provided imagery lives here. Only the pipeline is public.
 Data_to_reproduce_with/
 private_data/
+# personal documents dropped into the workspace (e.g. CVs)
+/*.pdf
+/*.docx
 *.dcm
 *.nii
 *.nii.gz
