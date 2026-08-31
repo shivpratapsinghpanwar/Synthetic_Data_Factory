@@ -47,16 +47,21 @@ def grouped_stratified_split(
             fixed_counts[rec.fixed_split] += 1
         else:
             free.append(rec)
+    warnings: list[str] = []
     if fixed_counts["test"]:
         test_frac = 0.0
     if fixed_counts["val"]:
         val_frac = 0.0
+    if (fixed_counts["val"] or fixed_counts["test"]) and test_frac > 0.0:
+        warnings.append(
+            "curated split present but no curated TEST - test is being carved "
+            "from free records; prefer a curated test for evaluation"
+        )
 
     by_class: dict[str, dict[str, list[ImageRecord]]] = defaultdict(lambda: defaultdict(list))
     for rec in free:
         by_class[rec.cls][rec.group_id].append(rec)
     per_class: dict[str, dict[str, int]] = {}
-    warnings: list[str] = []
 
     for cls in sorted(by_class):
         groups = sorted(by_class[cls].items())  # stable order before shuffling
@@ -82,8 +87,10 @@ def grouped_stratified_split(
         rng = random.Random(f"{seed}:{cls}")
         rng.shuffle(groups)
 
-        want_test = round(total * test_frac)
-        want_val = round(total * val_frac)
+        # A nonzero fraction must never silently round to zero for a class
+        # that is large enough to split (banker's rounding: round(0.5) == 0).
+        want_test = max(1, round(total * test_frac)) if test_frac > 0 else 0
+        want_val = max(1, round(total * val_frac)) if val_frac > 0 else 0
         counts = {"train": 0, "val": 0, "test": 0}
 
         for _, recs in groups:

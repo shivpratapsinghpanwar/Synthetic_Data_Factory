@@ -24,8 +24,21 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+import re
+
 from ..config import PipelineConfig, resolve_data_root
 from .base import DataError, DatasetAdapter, ImageRecord
+
+# Roboflow-style export suffix: base_jpg.rf.<32 hex>.jpg - every augmented
+# variant of one base image shares the prefix before this marker.
+_RF_SUFFIX = re.compile(r"_(jpe?g|png|bmp|webp)\.rf\.[0-9a-f]{16,}$", re.IGNORECASE)
+
+
+def base_stem(filename: str) -> str:
+    """Augmentation-invariant base name: variants of one source image map to
+    the same value, so the splitter keeps them on one side of every boundary."""
+    stem = filename.rsplit(".", 1)[0]
+    return _RF_SUFFIX.sub("", stem).lower()
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".bmp"}
 SPLIT_DIRS = {"train": "train", "test": "test", "valid": "val", "val": "val"}
@@ -84,15 +97,22 @@ class FolderClassAdapter(DatasetAdapter):
                 unlabelled += 1  # split dir without class subfolder, or root file
                 continue
 
-            # Unique id from the full relative path: bare stems like "1" repeat
-            # across splits and classes in these exports.
-            image_id = rel.as_posix().replace("/", "__")
+            # The relative path itself is the id: injective by construction
+            # (a "__"-joined form aliased train/cls/a__b.jpg with
+            # train/cls__a/b.jpg). Group by split-scope + class +
+            # augmentation-invariant base stem: Roboflow-style augmented
+            # siblings (which always share a split dir) can never straddle a
+            # carved boundary, while coincidentally equal bare stems across
+            # curated splits (different photos both named 1.jpg) stay
+            # independent instead of tripping the leakage assertion.
+            image_id = rel.as_posix()
+            scope = parts[0].lower() if parts[0].lower() in SPLIT_DIRS else "flat"
             records.append(
                 ImageRecord(
                     image_id=image_id,
                     path=path,
                     cls=cls,
-                    group_id=image_id,  # no patient linkage available
+                    group_id=f"{scope}::{cls}::{base_stem(rel.name)}",
                     exists=True,
                     fixed_split=fixed,
                 )

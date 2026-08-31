@@ -53,7 +53,10 @@ def sanitize_tree(source: Path, staging: Path) -> dict:
         target = staging / rel
         suffix = path.suffix.lower()
         if suffix in IMAGE_SUFFIXES:
-            target = target.with_suffix(".jpg" if suffix != ".png" else ".png")
+            # Keep the original suffix: renaming .jpeg -> .jpg collides with a
+            # sibling .jpg of the same stem and silently overwrites it. PIL
+            # picks the output format from the suffix; re-encoding still
+            # drops EXIF for every format.
             target.parent.mkdir(parents=True, exist_ok=True)
             try:
                 with Image.open(path) as img:
@@ -125,21 +128,28 @@ def upload(source: Path, slug: str, title: str = "", sanitize: bool = False) -> 
         encoding="utf-8",
     )
 
-    if dataset_exists(slug):
-        res = kaggle_cli.run(
-            "datasets", "version", "-p", str(staging), "-m", "refresh",
-            "--dir-mode", "zip", timeout=3600,
-        )
-        action = "versioned"
-    else:
-        # datasets create is PRIVATE by default; -u (public) is never passed.
-        res = kaggle_cli.run(
-            "datasets", "create", "-p", str(staging), "--dir-mode", "zip",
-            timeout=3600,
-        )
-        action = "created"
+    if counts.get("skipped"):
+        print(f"[upload-private] note: {counts['skipped']} non-image/non-xml "
+              f"file(s) included verbatim", flush=True)
 
-    shutil.rmtree(staging, ignore_errors=True)
+    try:
+        if dataset_exists(slug):
+            res = kaggle_cli.run(
+                "datasets", "version", "-p", str(staging), "-m", "refresh",
+                "--dir-mode", "zip", timeout=3600,
+            )
+            action = "versioned"
+        else:
+            # datasets create is PRIVATE by default; -u (public) is never passed.
+            res = kaggle_cli.run(
+                "datasets", "create", "-p", str(staging), "--dir-mode", "zip",
+                timeout=3600,
+            )
+            action = "created"
+    finally:
+        # The staging tree holds private imagery - never leave it behind,
+        # least of all after a failure.
+        shutil.rmtree(staging, ignore_errors=True)
     return {
         "action": action,
         "dataset": slug,
@@ -160,6 +170,9 @@ def main(argv: list[str] | None = None) -> int:
         args = [a for a in args if a != "--sanitize"]
     if "--title" in args:
         i = args.index("--title")
+        if i + 1 >= len(args):
+            print("--title requires a value", file=sys.stderr)
+            return 2
         title = args[i + 1]
         args = args[:i] + args[i + 2:]
     try:

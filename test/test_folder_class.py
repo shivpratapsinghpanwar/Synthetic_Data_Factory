@@ -61,9 +61,9 @@ def test_curated_test_is_honored_and_val_carved_from_train(tmp_path):
     # every curated test image is in test; nothing else joined it
     test_ids = {r.image_id for r in result["test"]}
     assert len(test_ids) == 12
-    assert all(i.startswith("test__") for i in test_ids)
+    assert all(i.startswith("test/") for i in test_ids)
     # val carved from train only
-    assert all(r.image_id.startswith("train__") for r in result["val"])
+    assert all(r.image_id.startswith("train/") for r in result["val"])
     assert len(result["val"]) == 8  # 0.2 * 40
     assert stats["fixed"]["test"] == 12
 
@@ -78,9 +78,9 @@ def test_colliding_stems_do_not_alias(tmp_path):
 def test_roi_parsed_from_sidecar(tmp_path):
     build_fixture(tmp_path)
     records, _ = get_adapter(_cfg(tmp_path)).index()
-    with_box = [r for r in records if r.image_id == "train__cond-a__0.jpg"]
+    with_box = [r for r in records if r.image_id == "train/cond-a/0.jpg"]
     assert roi_for(with_box[0]) == (10, 20, 60, 90)
-    without = [r for r in records if r.image_id == "train__cond-a__1.jpg"]
+    without = [r for r in records if r.image_id == "train/cond-a/1.jpg"]
     assert roi_for(without[0]) is None
 
 
@@ -110,6 +110,78 @@ def test_audit_rare_gate_disabled_at_zero(tmp_path):
     result = audit.run(cfg)
     assert result.success, result.error
     assert result.metrics["rare_classes"] == []
+
+
+def test_augmented_siblings_never_straddle_carved_splits(tmp_path):
+    """Review finding: Roboflow augmented variants of one base image must all
+    land on the same side of every carved boundary."""
+    from PIL import Image
+
+    for i in range(12):
+        for v in range(3):  # 3 augmented variants per base image
+            p = (tmp_path / "train" / "cond-a"
+                 / f"case{i}_jpg.rf.{v:032x}.jpg")
+            p.parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (40, 40), color=(i * 20, v * 60, 30)).save(p)
+
+    records, _ = get_adapter(_cfg(tmp_path)).index()
+    result, _ = splits_mod.grouped_stratified_split(
+        records, seed=9, val_frac=0.25, test_frac=0.0
+    )
+    side = {}
+    for name, recs in result.items():
+        for rec in recs:
+            base = rec.image_id.split("_jpg.rf.")[0]
+            assert side.setdefault(base, name) == name, base
+    assert result["val"], "val should not be empty"
+
+
+def test_path_ids_are_injective():
+    """Review finding: '__'-joined ids aliased train/cls/a__b.jpg with
+    train/cls__a/b.jpg. Path-based ids cannot alias."""
+    from PIL import Image
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        for rel in ("train/cls/a__b.jpg", "train/cls__a/b.jpg"):
+            p = root / rel
+            p.parent.mkdir(parents=True, exist_ok=True)
+            Image.new("RGB", (30, 30), color=(50, 50, 50)).save(p)
+        records, _ = get_adapter(_cfg(root)).index()
+        ids = [r.image_id for r in records]
+        assert len(ids) == 2 and len(set(ids)) == 2
+
+
+def test_small_class_gets_nonzero_val():
+    """Review finding: round() could silently allocate zero val to a class
+    that passed MIN_GROUPS_TO_SPLIT."""
+    from sdf.data.base import ImageRecord
+
+    recs = [
+        ImageRecord(f"img{i}.jpg", Path(f"img{i}.jpg"), "c", f"g{i}", True)
+        for i in range(5)  # round(5 * 0.10) == 0 under banker's rounding
+    ]
+    result, _ = splits_mod.grouped_stratified_split(
+        recs, seed=1, val_frac=0.10, test_frac=0.0
+    )
+    assert len(result["val"]) >= 1
+
+
+def test_sanitize_keeps_suffixes_no_collision(tmp_path):
+    """Review finding: renaming .jpeg -> .jpg overwrote a same-stem sibling."""
+    from PIL import Image
+
+    from sdf import private_upload
+
+    src = tmp_path / "src" / "c"
+    src.mkdir(parents=True)
+    Image.new("RGB", (20, 20), color=(10, 10, 10)).save(src / "a.jpg")
+    Image.new("RGB", (20, 20), color=(200, 200, 200)).save(src / "a.jpeg")
+    counts = private_upload.sanitize_tree(tmp_path / "src", tmp_path / "staged")
+    assert counts["images"] == 2
+    staged = sorted(x.name for x in (tmp_path / "staged" / "c").iterdir())
+    assert staged == ["a.jpeg", "a.jpg"]
 
 
 def test_sanitize_strips_exif_and_absolute_paths(tmp_path):
