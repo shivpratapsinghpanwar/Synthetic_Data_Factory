@@ -30,3 +30,20 @@ uv run python -m kaggle_runner run --entrypoint "python -m sdf run-stage audit"
 Design: [docs/pipeline_design.md](docs/pipeline_design.md)
 Measured results: [docs/results.md](docs/results.md)
 
+## Repository layout & data policy
+
+```
+kaggle_runner/          execution runner (docs/kaggle_runner.md)
+sdf/                    pipeline: adapters, backends, stages (docs/pipeline_design.md)
+kaggle_jobs/            small standalone jobs (smoke test)
+test/                   offline test suite (uv run pytest)
+docs/                   design docs, measured results, evidence JSONs
+runner.toml             execution config    pipeline*.toml  pipeline configs
+runs/                   (gitignored) per-run logs and artifacts
+Data_to_reproduce_with/ (gitignored) private client data - never committed
+```
+
+**Only the pipeline is public.** Private imagery stays local or in private
+Kaggle datasets; a preflight check refuses to run if data files ever become
+git-tracked.
+

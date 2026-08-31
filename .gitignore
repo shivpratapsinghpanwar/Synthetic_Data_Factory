@@ -1,7 +1,16 @@
+# --- PRIVATE DATA - never committed, never pushed ----------------------------
+# Client/hospital-provided imagery lives here. Only the pipeline is public.
+Data_to_reproduce_with/
+private_data/
+*.dcm
+*.nii
+*.nii.gz
+
 # --- Kaggle runner artifacts -------------------------------------------------
 runs/
 .sdf_build/
 .sdf_cache/
+.sdf_publish/
 
 # --- Credentials (never commit) ----------------------------------------------
 kaggle.json

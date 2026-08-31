@@ -73,6 +73,17 @@ def inspect(remote_name: str = "origin") -> GitState:
     )
 
 
+# Directories whose contents must never reach the public repo. The pipeline
+# is open source; client/hospital imagery is not.
+PRIVATE_PREFIXES = ("Data_to_reproduce_with/", "private_data/")
+
+
+def tracked_private_files(prefixes: tuple[str, ...] = PRIVATE_PREFIXES) -> list[str]:
+    """Tracked paths under private-data prefixes. Non-empty = policy breach."""
+    out = _git("ls-files", "--", *prefixes, check=False)
+    return [line for line in out.splitlines() if line.strip()]
+
+
 def push(remote_name: str = "origin", branch: str | None = None) -> str:
     """Push the current branch so Kaggle can clone the target commit."""
     branch = branch or _git("rev-parse", "--abbrev-ref", "HEAD")

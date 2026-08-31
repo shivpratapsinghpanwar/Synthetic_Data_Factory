@@ -51,6 +51,16 @@ def preflight(cfg: Config, *, allow_dirty: bool = False, check_remote: bool = Tr
             )
         )
 
+    leaked = gitctl.tracked_private_files()
+    checks.append(
+        Check(
+            "git.private_data",
+            not leaked,
+            "no private data tracked" if not leaked
+            else f"PRIVATE DATA TRACKED IN GIT: {leaked[:5]} - unstage before anything runs",
+        )
+    )
+
     # The live API call is authoritative. The file probe is only a hint used to
     # explain *why* auth failed, so an unrecognised credential filename can
     # never block a session that actually authenticates fine.

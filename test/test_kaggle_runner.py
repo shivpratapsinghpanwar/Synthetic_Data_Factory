@@ -453,6 +453,22 @@ def test_entrypoint_rejects_msys_mangled_paths():
     raise AssertionError("expected ConfigError for mangled path")
 
 
+def test_private_data_dirs_are_ignored_and_untracked():
+    """The privacy contract: client data directories must be gitignored and
+    contain zero tracked files. Only the pipeline is public."""
+    import subprocess
+
+    from kaggle_runner import gitctl
+
+    assert gitctl.tracked_private_files() == []
+    for prefix in gitctl.PRIVATE_PREFIXES:
+        probe = subprocess.run(
+            ["git", "check-ignore", prefix + "x"],
+            cwd=str(REPO_ROOT), capture_output=True, text=True,
+        )
+        assert probe.returncode == 0, f"{prefix} is not gitignored"
+
+
 # ------------------------------------------------------------------- publish
 def test_publish_staging_layout(tmp_path):
     import json as _json
