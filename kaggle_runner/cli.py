@@ -32,6 +32,10 @@ def _load(args) -> config.Config:
     if getattr(args, "gpu", None):
         cfg.kernel.enable_gpu = True
         cfg.kernel.accelerator = args.gpu
+    if getattr(args, "dataset_source", None):
+        cfg.kernel.dataset_sources = list(
+            dict.fromkeys(cfg.kernel.dataset_sources + args.dataset_source)
+        )
     if getattr(args, "kernel_source", None):
         cfg.kernel.kernel_sources = list(
             dict.fromkeys(cfg.kernel.kernel_sources + args.kernel_source)
@@ -281,6 +285,10 @@ def build_parser() -> argparse.ArgumentParser:
                        help="git push HEAD to origin before running")
     run_p.add_argument("--timeout", type=int, help="kernel time limit in seconds")
     run_p.add_argument("--slug", help="override the kernel slug (parallel sessions)")
+    run_p.add_argument(
+        "--dataset-source", action="append", metavar="OWNER/DATASET",
+        help="attach an extra Kaggle dataset for this run (repeatable)",
+    )
     run_p.add_argument(
         "--kernel-source", action="append", metavar="OWNER/KERNEL",
         help="mount another kernel's latest output under /kaggle/input/<kernel> (repeatable)",
