@@ -33,6 +33,8 @@ dataset_sources = [
     "kmader/skin-cancer-mnist-ham10000",        # skin lesions (modality 1)
     "xiaoweixumedicalai/imagechd",              # pediatric CHD CT (modality 2)
     "shivpratap0007/sdf-runner-artifacts",      # trained adapters + synthetic images (latest version)
+    "shivpratap0007/sdf-cond-a-private",      # PRIVATE client data (cond-a)
+    "shivpratap0007/sdf-cond-b-private",         # PRIVATE client data (cond-b lip)
 ]
 
 [job]
