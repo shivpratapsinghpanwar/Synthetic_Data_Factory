@@ -1,0 +1,27 @@
+# cond-b lip detector pipeline (PRIVATE client data - never in git).
+# Local: data under Data_to_reproduce_with/. Kaggle: attach the private
+# dataset and set SDF_DATA_ROOT=/kaggle/input/<slug>.
+
+[dataset]
+name = "folder_class"
+kaggle_slug = "shivpratap0007/sdf-cond-b-private"
+data_root = "Data_to_reproduce_with/V2_dataset_cond-b_"
+
+[splits]
+seed = 20260823
+val_frac = 0.10          # carved from their train; their test split is honored
+test_frac = 0.15         # ignored when a curated test exists
+group_key = "image"
+
+[generator]
+backend = "ddpm"         # prior-free: the only backend used on client data
+base_model = "from-scratch"
+resolution = 256
+rare_class_max_count = 0
+train_steps = 4000
+lr = 1e-4
+batch_size = 16
+grad_accum = 1
+sample_count = 100
+sample_steps = 60
+guidance = 1.0

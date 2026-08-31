@@ -106,6 +106,8 @@ def validate(cfg: PipelineConfig) -> None:
     if cfg.generator.resolution not in (256, 512):
         raise ConfigError("[generator] resolution must be 256 or 512")
     g = cfg.generator
+    if g.rare_class_max_count < 0:
+        raise ConfigError("[generator] rare_class_max_count must be >= 0 (0 disables)")
     for name in ("train_steps", "batch_size", "grad_accum", "sample_count", "sample_steps"):
         if getattr(g, name) <= 0:
             raise ConfigError(f"[generator] {name} must be positive")

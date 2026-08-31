@@ -84,9 +84,10 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
             f"{report['missing_files']}/{rows} referenced images missing "
             f"(> {MAX_MISSING_RATIO:.0%})"
         )
-    if not rare:
+    if not rare and cfg.generator.rare_class_max_count > 0:
         problems.append(
-            "no rare classes below the threshold - nothing for the generator to target"
+            "no rare classes below the threshold - nothing for the generator to target "
+            "(set rare_class_max_count = 0 to disable generation targeting)"
         )
     problems.extend(split_stats["warnings"])
 

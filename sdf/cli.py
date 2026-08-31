@@ -69,6 +69,15 @@ def _coerce(value: str):
     return value
 
 
+def cmd_upload_private(args) -> int:
+    from . import private_upload
+
+    extra = ["--title", args.title] if args.title else []
+    if args.sanitize:
+        extra.append("--sanitize")
+    return private_upload.main([args.source, args.slug, *extra])
+
+
 def cmd_report(args) -> int:
     from pathlib import Path as _P
 
@@ -108,6 +117,19 @@ def build_parser() -> argparse.ArgumentParser:
         help="stage option (repeatable), e.g. --opt cls=df --opt steps=40",
     )
     run_p.set_defaults(func=cmd_run_stage)
+
+    up_p = sub.add_parser(
+        "upload-private",
+        help="de-identify (EXIF-strip) and upload imagery as a PRIVATE Kaggle dataset",
+    )
+    up_p.add_argument("source", help="local directory of images")
+    up_p.add_argument("slug", help="owner/dataset-name")
+    up_p.add_argument("--title", default="")
+    up_p.add_argument(
+        "--sanitize", action="store_true",
+        help="opt-in: re-encode images (drop EXIF) instead of verbatim copies",
+    )
+    up_p.set_defaults(func=cmd_upload_private)
 
     rep_p = sub.add_parser("report", help="render an evaluate result to markdown")
     rep_p.add_argument("evaluate_json", help="path to a stage_evaluate*.json")

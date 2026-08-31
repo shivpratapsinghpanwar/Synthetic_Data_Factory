@@ -30,17 +30,43 @@ def grouped_stratified_split(
     test_frac: float,
 ) -> tuple[dict[str, list[ImageRecord]], dict]:
     """Return ({"train": [...], "val": [...], "test": [...]}, stats)."""
-    by_class: dict[str, dict[str, list[ImageRecord]]] = defaultdict(lambda: defaultdict(list))
-    for rec in records:
-        by_class[rec.cls][rec.group_id].append(rec)
-
     splits: dict[str, list[ImageRecord]] = {"train": [], "val": [], "test": []}
+
+    # Curated splits are honored verbatim (a Roboflow-style export may hold
+    # augmented near-duplicates of one base image inside train; re-splitting
+    # them randomly would leak variants across the boundary). If any record
+    # is pre-assigned to test/val, the splitter stops carving that split from
+    # the free records.
+    free: list[ImageRecord] = []
+    fixed_counts = {"train": 0, "val": 0, "test": 0}
+    for rec in records:
+        if rec.fixed_split:
+            if rec.fixed_split not in splits:
+                raise ValueError(f"invalid fixed_split {rec.fixed_split!r} on {rec.image_id}")
+            splits[rec.fixed_split].append(rec)
+            fixed_counts[rec.fixed_split] += 1
+        else:
+            free.append(rec)
+    if fixed_counts["test"]:
+        test_frac = 0.0
+    if fixed_counts["val"]:
+        val_frac = 0.0
+
+    by_class: dict[str, dict[str, list[ImageRecord]]] = defaultdict(lambda: defaultdict(list))
+    for rec in free:
+        by_class[rec.cls][rec.group_id].append(rec)
     per_class: dict[str, dict[str, int]] = {}
     warnings: list[str] = []
 
     for cls in sorted(by_class):
         groups = sorted(by_class[cls].items())  # stable order before shuffling
         total = sum(len(recs) for _, recs in groups)
+
+        if val_frac == 0.0 and test_frac == 0.0:
+            for _, recs in groups:
+                splits["train"].extend(recs)
+            per_class[cls] = {"train": total, "val": 0, "test": 0}
+            continue
 
         if len(groups) < MIN_GROUPS_TO_SPLIT:
             warnings.append(
@@ -78,6 +104,7 @@ def grouped_stratified_split(
         "seed": seed,
         "val_frac": val_frac,
         "test_frac": test_frac,
+        "fixed": fixed_counts,
         "per_class": per_class,
         "totals": {name: len(recs) for name, recs in splits.items()},
         "warnings": warnings,

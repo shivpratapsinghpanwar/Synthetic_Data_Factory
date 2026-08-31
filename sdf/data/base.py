@@ -23,6 +23,9 @@ class ImageRecord:
     cls: str        # condition/diagnosis label
     group_id: str   # physical entity (lesion, patient); split boundaries respect it
     exists: bool    # file actually present on disk
+    # Pre-assigned split ("train"/"val"/"test") for datasets that ship with
+    # curated splits we must honor; empty = let the splitter decide.
+    fixed_split: str = ""
 
 
 class DatasetAdapter(ABC):
@@ -43,12 +46,14 @@ class DatasetAdapter(ABC):
 def get_adapter(cfg) -> DatasetAdapter:
     """Look up the adapter for ``cfg.dataset.name``."""
     # Imported here to avoid a cycle (adapters import base).
+    from .folder_class import FolderClassAdapter
     from .ham10000 import HAM10000Adapter
     from .imagechd import ImageCHDAdapter
 
     adapters = {
         HAM10000Adapter.name: HAM10000Adapter,
         ImageCHDAdapter.name: ImageCHDAdapter,
+        FolderClassAdapter.name: FolderClassAdapter,
     }
     try:
         return adapters[cfg.dataset.name](cfg)
