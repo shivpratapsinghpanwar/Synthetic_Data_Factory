@@ -49,6 +49,14 @@ def main() -> int:
     if sh([sys.executable, "-m", "pip", "install", "-q", "-e", SCRATCH]) != 0:
         print("FATAL: pip install of the task suite failed")
         return 2
+    # The suite's pins drag mujoco down to a version mjlab no longer supports
+    # (mjENBL_MULTICCD AttributeError). The proven training env upgraded the
+    # mujoco stack afterwards - mirror that.
+    sh([sys.executable, "-m", "pip", "install", "-q", "-U",
+        "mujoco", "mujoco-warp", "warp-lang"])
+    sh([sys.executable, "-c",
+        "import mujoco, mujoco_warp; "
+        "print('[env] mujoco', mujoco.__version__)"])
 
     # --- find a real checkpoint ---------------------------------------------
     candidates = []
