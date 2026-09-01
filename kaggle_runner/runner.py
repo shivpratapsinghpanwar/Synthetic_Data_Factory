@@ -179,8 +179,25 @@ def execute(
         emit("push", f"pushing to {cfg.kernel.ref} ({cfg.kernel.accelerator or 'cpu'})")
         res = kaggle_cli.push(folder, cfg.kernel.timeout_s, cfg.kernel.accelerator)
         (paths.run_dir / "push.log").write_text(res.combined, encoding="utf-8")
+
+        # The CLI exits 0 even for a server-side rejection, and polling after
+        # a failed push observes the PREVIOUS version's terminal status - the
+        # runner would then download that version's output and report someone
+        # else's results as this run's. Refuse to poll unless the push
+        # verifiably created a new version.
+        push_error = kaggle_cli.parse_push_error(res.combined)
+        if push_error:
+            raise kaggle_cli.KaggleCliError(
+                f"kernels push rejected: {push_error}", output=res.combined[-2000:]
+            )
         kernel_version = kaggle_cli.parse_push_version(res.combined)
-        emit("push", f"kernel version {kernel_version or '?'} queued")
+        if kernel_version is None:
+            raise kaggle_cli.KaggleCliError(
+                "kernels push output did not name a new version - refusing to "
+                "poll (would risk collecting a previous version's results)",
+                output=res.combined[-2000:],
+            )
+        emit("push", f"kernel version {kernel_version} queued")
 
         # --- poll ----------------------------------------------------------
         kernel_status, queue_s = _poll(

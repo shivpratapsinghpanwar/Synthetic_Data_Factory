@@ -228,6 +228,25 @@ def test_parse_push_version():
     assert kaggle_cli.parse_push_version("no number here") is None
 
 
+def test_parse_push_error_detects_rejection_despite_exit_zero():
+    # Real rejection observed 2026-09-01: CLI exited 0 but pushed nothing,
+    # and the runner went on to collect the PREVIOUS version's output.
+    msg = kaggle_cli.parse_push_error(
+        "Kernel push error: Maximum batch GPU session count of 2 reached."
+    )
+    assert "Maximum batch GPU session count" in msg
+
+
+def test_parse_push_error_flags_errorish_output_without_success_line():
+    assert kaggle_cli.parse_push_error("some unexpected error occurred") != ""
+
+
+def test_parse_push_error_accepts_clean_push():
+    assert kaggle_cli.parse_push_error(
+        "Kernel version 7 successfully pushed. Please check progress at https://..."
+    ) == ""
+
+
 # -------------------------------------------------------------- error extract
 def _bootstrap_module():
     """Import the template as a module so its pure helpers can be tested."""
@@ -417,6 +436,27 @@ def test_summary_is_small_even_with_huge_logs(tmp_path):
     assert len(encoded) < 40_000, f"summary too big: {len(encoded)} bytes"
     assert len(result["log_tail"]) <= summary.MAX_TAIL_LINES
     assert len(result["error"]["traceback"]) <= summary.MAX_TRACEBACK_CHARS + 32
+
+
+def test_summary_rejects_stale_output_from_wrong_commit(tmp_path):
+    """A successful-looking result from a different commit is a stale download."""
+    result = _summary_for(
+        {
+            "success": True,
+            "exit_code": 0,
+            "stage": "done",
+            "durations_s": {},
+            "error": {},
+            "log_tail": ["[exit 0]"],
+            "log_bytes": 10,
+            "commit_executed": "a" * 40,  # requested commit is "b" * 40
+            "env": {},
+        },
+        tmp_path,
+    )
+    assert result["success"] is False
+    assert result["status"] == "failed:wrong-commit"
+    assert result["error"]["type"] == "StaleResultError"
 
 
 def test_summary_reports_kernel_error_even_if_job_claimed_success(tmp_path):

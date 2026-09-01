@@ -148,6 +148,22 @@ def build(
         err.setdefault("type", "KernelError")
         err["message"] = err.get("message") or f"Kaggle reported kernel status '{kernel_status}'"
 
+    # Last line of defense against stale output: if the kernel-side result
+    # names a different commit than this run requested, the download belongs
+    # to an earlier kernel version and must never be reported as success.
+    if success and commit_executed and commit_executed != git_state.commit:
+        success = False
+        stage = "wrong-commit"
+        err = {
+            "type": "StaleResultError",
+            "message": (
+                f"kernel output was produced by commit {commit_executed[:9]}, "
+                f"not the requested {git_state.short} - collected results "
+                "belong to a previous kernel version"
+            ),
+            "traceback": "",
+        }
+
     return {
         "schema_version": SCHEMA_VERSION,
         "run_id": run_id,

@@ -111,6 +111,23 @@ def parse_push_version(output: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
+# The CLI exits 0 even when the push is rejected server-side (e.g. "Kernel
+# push error: Maximum batch GPU session count of 2 reached."), so the exit
+# code alone cannot be trusted.
+_PUSH_ERROR_RE = re.compile(r"push error:?\s*(.+)", re.IGNORECASE)
+
+
+def parse_push_error(output: str) -> str:
+    """Return the rejection message from `kernels push` output, or ""."""
+    match = _PUSH_ERROR_RE.search(output)
+    if match:
+        return match.group(1).strip()
+    text = output.lower()
+    if "error" in text and "successfully pushed" not in text:
+        return output.strip()[-300:]
+    return ""
+
+
 _STATUS_RE = re.compile(r'status\s+"([^"]+)"', re.IGNORECASE)
 _STATUS_BARE_RE = re.compile(
     r"\b(complete|error|running|queued|pending|cancelAcknowledged|cancelRequested)\b",
