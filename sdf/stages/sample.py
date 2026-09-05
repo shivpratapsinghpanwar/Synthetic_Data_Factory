@@ -43,6 +43,11 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
         str(opts.get("adapter_dir", ""))
         or output_dir() / "lora" / backend_name / cls / backend.ADAPTER_DIR_NAME
     )
+    if not adapter_dir.is_dir() and not opts.get("adapter_dir"):
+        # Shared multi-study checkpoint (train_joint) serves every class.
+        joint = output_dir() / "lora" / backend_name / "joint" / backend.ADAPTER_DIR_NAME
+        if joint.is_dir():
+            adapter_dir = joint
     if not adapter_dir.is_dir():
         return StageResult(
             stage="sample", success=False,
