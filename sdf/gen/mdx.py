@@ -484,6 +484,125 @@ def train(cfg, records, cls: str, out_dir: Path, opts: dict) -> dict:
     return report
 
 
+# -------------------------------------------------------- counterfactual edit
+def edit(cfg, source_paths: list, cls_from: str, cls_to: str,
+         adapter_dir: Path, out_dir: Path, opts: dict) -> list[dict]:
+    """CF-Edit: turn real ``cls_from`` images into ``cls_to`` counterfactuals.
+
+    SDEdit-style label swap: diffuse each real image forward to
+    ``strength * T`` (structure survives, appearance detail is destroyed),
+    then denoise under the TARGET label with CFG through the study's expert.
+    The manifest rows record the source image and strength, so every output
+    is a paired, auditable counterfactual. No training involved.
+    """
+    import torch
+    from diffusers import DDIMScheduler
+    from PIL import Image
+
+    steps = int(opts.get("sample_steps", 60))
+    strength = float(opts.get("strength", 0.5))
+    guidance = float(opts.get("guidance", 2.0))
+    base_seed = int(opts.get("seed", cfg.splits.seed))
+    batch = int(opts.get("sample_batch", 16))
+    if not (0.0 < strength <= 1.0):
+        raise ValueError(f"strength must be in (0, 1], got {strength}")
+
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model, meta = load_checkpoint(adapter_dir, ema=True)
+    model = model.to(device).eval()
+    resolution = int(meta["resolution"])
+    vocab = list(meta["vocab"])
+    conditions = list(meta["conditions"])
+
+    condition = _condition_tag(cfg)
+    label_to = f"{condition}/{cls_to}"
+    if label_to not in vocab:
+        raise ValueError(f"label {label_to!r} not in checkpoint vocab {vocab}")
+    label_idx = vocab.index(label_to)
+    cond_idx = conditions.index(condition)
+    null_idx = len(vocab)
+
+    scheduler = DDIMScheduler(num_train_timesteps=1000, beta_schedule="squaredcos_cap_v2")
+    scheduler.set_timesteps(steps, device=device)
+    timesteps = scheduler.timesteps
+    t_start = int(strength * scheduler.config.num_train_timesteps) - 1
+    # Default to the MINIMAL edit if nothing matches - never silently fall
+    # back to full regeneration, which would break the counterfactual pairing.
+    start_idx = len(timesteps) - 1
+    for i, t in enumerate(timesteps):
+        if int(t) <= t_start:
+            start_idx = i
+            break
+
+    def load_pixels(path) -> "torch.Tensor":
+        with Image.open(path) as img:
+            img = img.convert("RGB")
+            side = min(img.size)
+            left = (img.width - side) // 2
+            top = (img.height - side) // 2
+            img = img.crop((left, top, left + side, top + side))
+            img = img.resize((resolution, resolution), Image.LANCZOS)
+            data = torch.frombuffer(bytearray(img.tobytes()), dtype=torch.uint8)
+        data = data.reshape(resolution, resolution, 3)
+        return (data.permute(2, 0, 1).float() / 127.5) - 1.0
+
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows: list[dict] = []
+    t0 = time.time()
+    produced = 0
+    while produced < len(source_paths):
+        chunk = source_paths[produced:produced + batch]
+        n = len(chunk)
+        seeds = [base_seed + produced + i for i in range(n)]
+        x0 = torch.stack([load_pixels(p) for p in chunk]).to(device)
+        generator = torch.Generator(device=device).manual_seed(seeds[0])
+        noise = torch.randn(x0.shape, device=device, generator=generator)
+        x = scheduler.add_noise(x0, noise, timesteps[start_idx].expand(n))
+        li = torch.full((n,), label_idx, device=device, dtype=torch.long)
+        ni = torch.full((n,), null_idx, device=device, dtype=torch.long)
+        ci = torch.full((n,), cond_idx, device=device, dtype=torch.long)
+
+        with torch.no_grad():
+            for t in timesteps[start_idx:]:
+                tt = t.expand(n) if t.dim() == 0 else t
+                with torch.autocast("cuda", dtype=torch.float16, enabled=device == "cuda"):
+                    eps_c = model(x, tt, li, ci)
+                    if guidance > 1.0:
+                        eps_u = model(x, tt, ni, ci)
+                        eps = eps_u + guidance * (eps_c - eps_u)
+                    else:
+                        eps = eps_c
+                x = scheduler.step(eps.float(), t, x).prev_sample
+
+        images = ((x.clamp(-1, 1) + 1) * 127.5).to(torch.uint8).permute(0, 2, 3, 1).cpu().numpy()
+        for i in range(n):
+            seed = seeds[i]
+            image_id = f"syn_{cls_to}_cfe_{seed}"
+            file_name = f"{image_id}.png"
+            Image.fromarray(images[i]).save(out_dir / file_name)
+            rows.append(
+                {
+                    "image_id": image_id,
+                    "file": file_name,
+                    "cls": cls_to,
+                    "backend": "mdx_cfe",
+                    "base_model": "from-scratch",
+                    "checkpoint": str(adapter_dir),
+                    "seed": seed,
+                    "prompt": f"cf-edit {condition}/{cls_from}->{label_to} "
+                              f"(strength={strength}, cfg={guidance})",
+                    "sample_steps": steps,
+                    "resolution": resolution,
+                    "source_image": Path(str(chunk[i])).name,
+                    "edit_strength": strength,
+                }
+            )
+        produced += n
+        print(f"[mdx-edit] {label_to} {produced}/{len(source_paths)} "
+              f"({time.time() - t0:.0f}s)", flush=True)
+    return rows
+
+
 # ------------------------------------------------------------------ sampling
 def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[dict]:
     import torch

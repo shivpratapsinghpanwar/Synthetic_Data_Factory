@@ -3,6 +3,7 @@
 from . import (
     audit,
     augment,
+    counterfact,
     evaluate,
     probe_ml,
     quality_gate,
@@ -20,6 +21,7 @@ REGISTRY = {
     "train_lora": train_lora.run,
     "train_joint": train_joint.run,
     "sample": sample.run,
+    "counterfact": counterfact.run,
     "quality_gate": quality_gate.run,
     "select": select.run,
     "augment": augment.run,

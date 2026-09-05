@@ -248,6 +248,69 @@ def test_train_and_sample_tiny_end_to_end(tmp_path):
                    {"count": 1, "sample_steps": 1})
 
 
+def test_counterfact_stage_validates_inputs(tmp_path, monkeypatch):
+    from sdf.stages import counterfact
+
+    monkeypatch.setenv("SDF_OUTPUT_DIR", str(tmp_path))
+    assert not counterfact.run(config.PipelineConfig(), {}).success
+    same = counterfact.run(
+        config.PipelineConfig(), {"cls_from": "x", "cls_to": "x"}
+    )
+    assert not same.success and "distinct" in same.error
+    missing = counterfact.run(
+        config.PipelineConfig(), {"cls_from": "a", "cls_to": "b"}
+    )
+    assert not missing.success and "checkpoint not found" in missing.error
+
+
+def test_cf_edit_produces_paired_counterfactuals(tmp_path, monkeypatch):
+    pytest.importorskip("torch")
+    pytest.importorskip("diffusers")
+
+    from sdf.stages import counterfact
+
+    monkeypatch.setenv("SDF_OUTPUT_DIR", str(tmp_path))
+    data_root = tmp_path / "data"
+    recs = _fixture_records(data_root, "pos", 6) + _fixture_records(
+        data_root, "neg", 6
+    )
+    cfg = _mini_cfg("cond_t")
+    cfg.dataset.data_root = str(data_root)
+    opts = {
+        "steps": 2, "resolution": 64, "patch": 16, "dim": 32, "depth": 2,
+        "heads": 2, "mlp_ratio": 2, "expert_rank": 4, "batch_size": 4,
+        "checkpoint_every": 0,
+    }
+    report = mdx.train_joint(
+        mdx._labelled_from_records(cfg, recs), tmp_path / "lora" / "mdx" / "joint",
+        opts, seed=1,
+    )
+
+    result = counterfact.run(cfg, {
+        "cls_from": "pos", "cls_to": "neg", "count": 3, "strength": 0.5,
+        "sample_steps": 2, "sample_batch": 2, "guidance": 1.5, "seed": 5,
+        "adapter_dir": report["adapter_dir"],
+    })
+    assert result.success, result.error
+    assert result.metrics["count"] == 3
+
+    from sdf import manifest as manifest_mod
+
+    rows = manifest_mod.read(tmp_path / "synthetic_manifest.jsonl")
+    assert len(rows) == 3
+    for row in rows:
+        assert row["backend"] == "mdx_cfe"
+        assert row["cls"] == "neg"
+        assert row["source_image"].endswith(".jpg")  # pairing recorded
+        assert row["edit_strength"] == 0.5
+        assert (tmp_path / row["file"]).exists()
+
+    with pytest.raises(ValueError, match="strength"):
+        mdx.edit(cfg, [recs[0].path], "pos", "neg",
+                 Path(report["adapter_dir"]), tmp_path / "x",
+                 {"strength": 1.5, "sample_steps": 2})
+
+
 def test_freeze_trunk_trains_only_experts_and_labels(tmp_path):
     pytest.importorskip("torch")
     pytest.importorskip("diffusers")
