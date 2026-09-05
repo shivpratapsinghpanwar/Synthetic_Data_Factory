@@ -156,11 +156,15 @@ def test_expert_gradients_are_hard_routed():
     torch = pytest.importorskip("torch")
 
     model = mdx.build_model(_tiny_arch(["a/x", "b/y"], ["a", "b"]))
-    # Give experts and gates signal so gradients flow.
+    # The network is a zero map at init (zero-init head and gates), which
+    # would make EVERY gradient zero and the routing assertion vacuous - give
+    # experts, gates and the output head signal so gradients actually flow.
     with torch.no_grad():
         for block in model.blocks:
             block.expert_up.normal_(0, 0.1)
             block.ada.weight.normal_(0, 0.1)
+        model.final_ada.weight.normal_(0, 0.1)
+        model.final_out.weight.normal_(0, 0.1)
     x = torch.randn(4, 3, 64, 64)
     t = torch.randint(0, 1000, (4,))
     cond = torch.zeros(4, dtype=torch.long)  # every sample routed to expert 0
