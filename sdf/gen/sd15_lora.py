@@ -92,7 +92,7 @@ def train(cfg, records, cls: str, out_dir: Path, opts: dict) -> dict:
     device = "cuda" if torch.cuda.is_available() else "cpu"
     torch.manual_seed(seed)
 
-    base = gen.base_model
+    base = str(opts.get("base_model", "")) or gen.base_model
     tokenizer = CLIPTokenizer.from_pretrained(base, subfolder="tokenizer")
     text_encoder = CLIPTextModel.from_pretrained(base, subfolder="text_encoder").to(device)
     vae = AutoencoderKL.from_pretrained(base, subfolder="vae").to(device)
@@ -113,7 +113,7 @@ def train(cfg, records, cls: str, out_dir: Path, opts: dict) -> dict:
     trainable = sum(p.numel() for p in unet.parameters() if p.requires_grad)
 
     # One fixed prompt per class -> encode once, reuse for every batch.
-    prompt = prompt_for(cls)
+    prompt = prompt_for(cls, str(opts.get("prompt", "")) or cfg.generator.prompt_template)
     with torch.no_grad():
         tokens = tokenizer(
             prompt,
@@ -262,7 +262,8 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
     # imagery (skin close-ups) and returns black frames. These are private
     # research artifacts, provenance-tracked as synthetic; see design doc §7.
     pipe = StableDiffusionPipeline.from_pretrained(
-        gen.base_model, torch_dtype=dtype, safety_checker=None, requires_safety_checker=False
+        str(opts.get("base_model", "")) or gen.base_model,
+        torch_dtype=dtype, safety_checker=None, requires_safety_checker=False,
     )
     merged = PeftModel.from_pretrained(pipe.unet, str(adapter_dir)).merge_and_unload()
     pipe.unet = merged
@@ -275,7 +276,7 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
     pipe = pipe.to(device)
     pipe.set_progress_bar_config(disable=True)
 
-    prompt = prompt_for(cls)
+    prompt = prompt_for(cls, str(opts.get("prompt", "")) or cfg.generator.prompt_template)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict] = []
     t0 = time.time()
@@ -299,7 +300,7 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
                 "file": file_name,
                 "cls": cls,
                 "backend": "sd15_lora",
-                "base_model": gen.base_model,
+                "base_model": str(opts.get("base_model", "")) or gen.base_model,
                 "checkpoint": str(adapter_dir),
                 "seed": seed,
                 "prompt": prompt,

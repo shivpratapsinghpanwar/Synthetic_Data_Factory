@@ -106,7 +106,7 @@ def train(cfg, records, cls: str, out_dir: Path, opts: dict) -> dict:
     unet = get_peft_model(unet, lora)
     trainable = sum(p.numel() for p in unet.parameters() if p.requires_grad)
 
-    prompt = prompt_for(cls)
+    prompt = prompt_for(cls, str(opts.get("prompt", "")) or cfg.generator.prompt_template)
     prompt_embeds, pooled = _encode_prompt(prompt, tokenizers, text_encoders, device)
     prompt_embeds = prompt_embeds.float()
     pooled = pooled.float()
@@ -238,7 +238,7 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
     pipe.enable_vae_slicing()
     pipe.set_progress_bar_config(disable=True)
 
-    prompt = prompt_for(cls)
+    prompt = prompt_for(cls, str(opts.get("prompt", "")) or cfg.generator.prompt_template)
     out_dir.mkdir(parents=True, exist_ok=True)
     rows: list[dict] = []
     t0 = time.time()

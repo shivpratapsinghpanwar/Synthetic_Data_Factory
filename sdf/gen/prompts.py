@@ -51,11 +51,16 @@ class PromptError(KeyError):
     pass
 
 
-def prompt_for(cls: str) -> str:
-    try:
+def prompt_for(cls: str, template: str = "") -> str:
+    """Prompt for a class: the curated table first, else the config's
+    template with ``{cls}`` filled at runtime (keeps dataset-specific class
+    vocabulary out of the code)."""
+    if cls in CLASS_PROMPTS:
         return CLASS_PROMPTS[cls][1]
-    except KeyError:
-        raise PromptError(
-            f"no prompt defined for class {cls!r} (SD backends need one; "
-            f"known: {sorted(CLASS_PROMPTS)}). The ddpm backend needs no prompt."
-        ) from None
+    if template:
+        return template.format(cls=cls.replace("_", " "))
+    raise PromptError(
+        f"no prompt defined for class {cls!r} (SD backends need one; "
+        f"known: {sorted(CLASS_PROMPTS)}; or set [generator] prompt_template). "
+        "The ddpm and mdx backends need no prompt."
+    )

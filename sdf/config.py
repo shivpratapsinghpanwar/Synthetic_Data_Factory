@@ -59,6 +59,9 @@ class GeneratorConfig:
     # Policy switch: generator may only train on region-of-interest crops
     # (VOC sidecar boxes); images without a box are excluded entirely.
     roi_only: bool = False
+    # Prompt template for SD backends on datasets outside the curated prompt
+    # table; "{cls}" is filled with the runtime class name.
+    prompt_template: str = ""
 
 
 @dataclass

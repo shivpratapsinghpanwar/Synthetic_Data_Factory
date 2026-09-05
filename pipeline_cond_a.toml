@@ -15,8 +15,9 @@ test_frac = 0.15         # ignored when a curated test exists
 group_key = "image"
 
 [generator]
-backend = "ddpm"         # prior-free: the only backend used on client data
+backend = "mdx"          # default arm; sd15_lora/sdxl_lora arms via --opt backend=
 base_model = "from-scratch"
+prompt_template = "a clinical medical photograph of {cls}, hospital documentation image"
 resolution = 256
 rare_class_max_count = 600
 train_steps = 4000

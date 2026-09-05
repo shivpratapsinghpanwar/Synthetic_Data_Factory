@@ -41,6 +41,18 @@ def test_config_accepts_mdx_and_new_fields(tmp_path):
     assert cfg.generator.roi_only is True
 
 
+def test_prompt_template_fills_runtime_class():
+    from sdf.gen.prompts import PromptError, prompt_for
+
+    assert prompt_for("df").startswith("a dermatoscopy")  # curated table wins
+    assert (
+        prompt_for("some_label", "a medical photograph of {cls}")
+        == "a medical photograph of some label"
+    )
+    with pytest.raises(PromptError):
+        prompt_for("some_label")
+
+
 def test_default_patch_keeps_constant_tokens():
     for res in (64, 128, 256):
         assert (res // mdx._default_patch(res)) ** 2 == 256
