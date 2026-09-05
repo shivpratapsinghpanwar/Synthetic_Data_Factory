@@ -24,6 +24,29 @@ def test_config_loads():
     assert cfg.repo.url.startswith("https://")
 
 
+def test_runner_local_overlay_appends_dataset_sources(tmp_path):
+    """Private dataset slugs live only in runner.local.toml (gitignored) and
+    are appended to the tracked list; scalar keys override."""
+    base = tmp_path / "runner.toml"
+    base.write_text(
+        "[repo]\n"
+        'url = "https://example.com/x.git"\n'
+        "[kernel]\n"
+        'owner = "o"\nslug = "k"\ntitle = "K"\n'
+        'dataset_sources = ["pub/one"]\n'
+        "[job]\n"
+        'entrypoint = "python x.py"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "runner.local.toml").write_text(
+        '[kernel]\ndataset_sources = ["own/private-a", "pub/one"]\ntimeout_s = 99\n',
+        encoding="utf-8",
+    )
+    cfg = config.load(base)
+    assert cfg.kernel.dataset_sources == ["pub/one", "own/private-a"]
+    assert cfg.kernel.timeout_s == 99
+
+
 def test_config_rejects_gpu_without_accelerator(tmp_path=None):
     cfg = config.load()
     cfg.kernel.enable_gpu = True
@@ -502,8 +525,10 @@ def test_private_data_dirs_are_ignored_and_untracked():
 
     assert gitctl.tracked_private_files() == []
     for prefix in gitctl.PRIVATE_PREFIXES:
+        # Directory prefixes get a child probe; glob pathspecs get expanded.
+        candidate = prefix + "x" if prefix.endswith("/") else prefix.replace("*", "probe")
         probe = subprocess.run(
-            ["git", "check-ignore", prefix + "x"],
+            ["git", "check-ignore", candidate],
             cwd=str(REPO_ROOT), capture_output=True, text=True,
         )
         assert probe.returncode == 0, f"{prefix} is not gitignored"

@@ -2,6 +2,8 @@
 # Client/hospital-provided imagery lives here. Only the pipeline is public.
 Data_to_reproduce_with/
 private_data/
+# local config overlays holding private dataset identifiers
+*.local.toml
 # personal documents dropped into the workspace (e.g. CVs)
 /*.pdf
 /*.docx

@@ -80,12 +80,32 @@ def _filter(cls, data: dict, section: str):
     return cls(**data)
 
 
+def _merge_local_overlay(cfg_path: Path, raw: dict) -> dict:
+    """Merge ``<name>.local.toml`` (gitignored) over the tracked config.
+
+    Private identifiers (Kaggle slugs, client data paths) live only in the
+    overlay so the public repo never names them.
+    """
+    local = cfg_path.with_name(cfg_path.stem + ".local.toml")
+    if not local.exists():
+        return raw
+    with local.open("rb") as fh:
+        extra = tomllib.load(fh)
+    for section, values in extra.items():
+        if isinstance(values, dict):
+            raw.setdefault(section, {}).update(values)
+        else:
+            raw[section] = values
+    return raw
+
+
 def load(path: Path | str | None = None) -> PipelineConfig:
     cfg_path = Path(path) if path else DEFAULT_CONFIG_PATH
     if not cfg_path.exists():
         raise ConfigError(f"config file not found: {cfg_path}")
     with cfg_path.open("rb") as fh:
         raw = tomllib.load(fh)
+    raw = _merge_local_overlay(cfg_path, raw)
 
     cfg = PipelineConfig(
         dataset=_filter(DatasetConfig, _section(raw, "dataset"), "dataset"),

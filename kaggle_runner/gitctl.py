@@ -73,9 +73,10 @@ def inspect(remote_name: str = "origin") -> GitState:
     )
 
 
-# Directories whose contents must never reach the public repo. The pipeline
-# is open source; client/hospital imagery is not.
-PRIVATE_PREFIXES = ("Data_to_reproduce_with/", "private_data/")
+# Pathspecs whose matches must never reach the public repo. The pipeline is
+# open source; client/hospital imagery is not, and neither are the *.local.toml
+# overlays that hold the private dataset identifiers.
+PRIVATE_PREFIXES = ("Data_to_reproduce_with/", "private_data/", "*.local.toml")
 
 
 def tracked_private_files(prefixes: tuple[str, ...] = PRIVATE_PREFIXES) -> list[str]:

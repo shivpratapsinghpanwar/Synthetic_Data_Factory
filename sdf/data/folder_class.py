@@ -1,6 +1,6 @@
 """Generic adapter for class-per-folder image datasets (private client data).
 
-Handles the two layouts the cond-a/cond-b deliveries use:
+Handles the two layouts private client deliveries use:
 
     root/<class>/*.jpg                              flat classes
     root/{train,test,valid}/<class>/*.jpg           curated splits (honored)

@@ -105,6 +105,31 @@ def _filter(cls, data: dict, section: str):
         raise ConfigError(f"runner.toml [{section}]: {exc}") from exc
 
 
+def _merge_local_overlay(cfg_path: Path, raw: dict) -> dict:
+    """Merge ``runner.local.toml`` (gitignored) over the tracked config.
+
+    Private identifiers (client dataset slugs) live only in the overlay so
+    the public repo never names them. Scalar keys override; list keys
+    (dataset_sources, kernel_sources) append.
+    """
+    local = cfg_path.with_name(cfg_path.stem + ".local.toml")
+    if not local.exists():
+        return raw
+    with local.open("rb") as fh:
+        extra = tomllib.load(fh)
+    for section, values in extra.items():
+        if not isinstance(values, dict):
+            raw[section] = values
+            continue
+        target = raw.setdefault(section, {})
+        for key, value in values.items():
+            if isinstance(value, list) and isinstance(target.get(key), list):
+                target[key] = target[key] + [v for v in value if v not in target[key]]
+            else:
+                target[key] = value
+    return raw
+
+
 def load(path: Path | str | None = None) -> Config:
     """Read runner.toml and return a validated :class:`Config`."""
     cfg_path = Path(path) if path else DEFAULT_CONFIG_PATH
@@ -113,6 +138,7 @@ def load(path: Path | str | None = None) -> Config:
 
     with cfg_path.open("rb") as fh:
         raw = tomllib.load(fh)
+    raw = _merge_local_overlay(cfg_path, raw)
 
     cfg = Config(
         repo=_filter(RepoConfig, _section(raw, "repo"), "repo"),

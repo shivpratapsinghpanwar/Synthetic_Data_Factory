@@ -1,11 +1,11 @@
-# cond-b lip detector pipeline (PRIVATE client data - never in git).
-# Local: data under Data_to_reproduce_with/. Kaggle: attach the private
-# dataset and set SDF_DATA_ROOT=/kaggle/input/<slug>.
+# Private study B pipeline (client data - never in git). The real dataset
+# identifiers live in pipeline_cond_b.local.toml (gitignored). On Kaggle,
+# attach the private dataset and pass --data-root or set SDF_DATA_ROOT.
 
 [dataset]
 name = "folder_class"
-kaggle_slug = "shivpratap0007/sdf-cond-b-private"
-data_root = "Data_to_reproduce_with/V2_dataset_cond-b_"
+kaggle_slug = "private/local-overlay"
+data_root = ""
 
 [splits]
 seed = 20260823

@@ -27,21 +27,21 @@ def build_fixture(root: Path) -> None:
 
     # curated split layout, with colliding bare stems across splits/classes
     for i in range(20):
-        img(root / "train" / "cond-a" / f"{i}.jpg", 30 + i)
+        img(root / "train" / "cls_pos" / f"{i}.jpg", 30 + i)
         img(root / "train" / "cls_neg" / f"{i}.jpg", 130 + i)
     for i in range(6):
-        img(root / "test" / "cond-a" / f"{i}.jpg", 90 + i)
+        img(root / "test" / "cls_pos" / f"{i}.jpg", 90 + i)
         img(root / "test" / "cls_neg" / f"{i}.jpg", 200 + i)
     # VOC sidecar for one train image
-    (root / "train" / "cond-a" / "0.xml").write_text(
-        VOC.format(name="0.jpg", cls="cond-a"), encoding="utf-8"
+    (root / "train" / "cls_pos" / "0.xml").write_text(
+        VOC.format(name="0.jpg", cls="cls_pos"), encoding="utf-8"
     )
     # flat, label-less valid dir -> excluded but counted
     img(root / "valid" / "stray.jpg", 250)
 
 
 def _cfg(root: Path) -> config.PipelineConfig:
-    cfg = config.load(REPO_ROOT / "pipeline_cond-a.toml")
+    cfg = config.load(REPO_ROOT / "pipeline_cond_a.toml")
     cfg.dataset.data_root = str(root)
     return cfg
 
@@ -78,16 +78,16 @@ def test_colliding_stems_do_not_alias(tmp_path):
 def test_roi_parsed_from_sidecar(tmp_path):
     build_fixture(tmp_path)
     records, _ = get_adapter(_cfg(tmp_path)).index()
-    with_box = [r for r in records if r.image_id == "train/cond-a/0.jpg"]
+    with_box = [r for r in records if r.image_id == "train/cls_pos/0.jpg"]
     assert roi_for(with_box[0]) == (10, 20, 60, 90)
-    without = [r for r in records if r.image_id == "train/cond-a/1.jpg"]
+    without = [r for r in records if r.image_id == "train/cls_pos/1.jpg"]
     assert roi_for(without[0]) is None
 
 
 def test_flat_class_layout_left_to_splitter(tmp_path):
     from PIL import Image
 
-    for cls in ("cond-a", "cls_neg"):
+    for cls in ("cls_pos", "cls_neg"):
         for i in range(10):
             p = tmp_path / cls / f"{cls}_{i}.jpg"
             p.parent.mkdir(parents=True, exist_ok=True)
@@ -119,7 +119,7 @@ def test_augmented_siblings_never_straddle_carved_splits(tmp_path):
 
     for i in range(12):
         for v in range(3):  # 3 augmented variants per base image
-            p = (tmp_path / "train" / "cond-a"
+            p = (tmp_path / "train" / "cls_pos"
                  / f"case{i}_jpg.rf.{v:032x}.jpg")
             p.parent.mkdir(parents=True, exist_ok=True)
             Image.new("RGB", (40, 40), color=(i * 20, v * 60, 30)).save(p)
@@ -230,6 +230,22 @@ def test_verbatim_mode_copies_bytes_untouched(tmp_path):
     counts = private_upload.verbatim_tree(tmp_path / "src", staging)
     assert counts["images"] == 1
     assert (staging / "cls_a" / "a.jpg").read_bytes() == original  # byte-identical
+
+
+def test_local_overlay_supplies_private_identifiers(tmp_path):
+    """Tracked configs hold placeholders; the gitignored .local.toml overlay
+    carries the real private identifiers."""
+    (tmp_path / "p.toml").write_text(
+        '[dataset]\nname = "folder_class"\nkaggle_slug = "private/local-overlay"\n',
+        encoding="utf-8",
+    )
+    (tmp_path / "p.local.toml").write_text(
+        '[dataset]\nkaggle_slug = "owner/real-slug"\ndata_root = "somewhere"\n',
+        encoding="utf-8",
+    )
+    cfg = config.load(tmp_path / "p.toml")
+    assert cfg.dataset.kaggle_slug == "owner/real-slug"
+    assert cfg.dataset.data_root == "somewhere"
 
 
 def _run_all():
