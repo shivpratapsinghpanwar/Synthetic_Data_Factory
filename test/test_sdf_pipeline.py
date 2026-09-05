@@ -432,6 +432,7 @@ def test_augment_composes_real_and_synthetic(tmp_path):
     assert result.metrics["accepted_synthetic"] == 2
     assert result.metrics["skipped"] == {
         "flagged": 1, "missing_file": 1, "not_marked_synthetic": 0,
+        "not_selected": 0,
     }
 
     with (out / "train_index.csv").open(newline="") as fh:

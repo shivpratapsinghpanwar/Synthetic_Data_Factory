@@ -48,6 +48,20 @@ def _flagged_images(syn_root: Path) -> set[str]:
     return flagged
 
 
+def _selections(syn_root: Path) -> dict[str, set[str]]:
+    """Per-class committee selections written by the select stage. A class
+    with a selection file admits ONLY the listed images; other classes keep
+    the take-all behavior."""
+    chosen: dict[str, set[str]] = {}
+    for path in sorted(syn_root.glob("selection_*.json")):
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+            chosen[str(data["cls"])] = set(data["selected"])
+        except (json.JSONDecodeError, KeyError, TypeError):
+            continue
+    return chosen
+
+
 def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     started = time.time()
     opts = opts or {}
@@ -70,8 +84,10 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
     rows = manifest_mod.read(manifest_path)
     flagged = _flagged_images(syn_root)
 
+    selections = _selections(syn_root)
     accepted: list[tuple[str, str]] = []  # (path, cls)
-    skipped = {"flagged": 0, "missing_file": 0, "not_marked_synthetic": 0}
+    skipped = {"flagged": 0, "missing_file": 0, "not_marked_synthetic": 0,
+               "not_selected": 0}
     for row in rows:
         name = Path(row.get("file", "")).name
         if not row.get("synthetic"):
@@ -79,6 +95,10 @@ def run(cfg: PipelineConfig, opts: dict | None = None) -> StageResult:
             continue
         if name in flagged:
             skipped["flagged"] += 1
+            continue
+        chosen = selections.get(str(row.get("cls", "")))
+        if chosen is not None and name not in chosen:
+            skipped["not_selected"] += 1
             continue
         path = syn_root / row["file"]
         if not path.exists():
