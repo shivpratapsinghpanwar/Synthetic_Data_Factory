@@ -6,6 +6,7 @@
 name = "folder_class"
 kaggle_slug = "private/local-overlay"
 data_root = ""
+condition = "cond_a"     # study tag for the shared multi-study generator
 
 [splits]
 seed = 20260823

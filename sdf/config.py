@@ -25,6 +25,9 @@ class DatasetConfig:
     # Explicit local root for the dataset. Empty -> auto-discover:
     # $SDF_DATA_ROOT, then /kaggle/input (when running on Kaggle).
     data_root: str = ""
+    # Neutral study tag ("cond_a", ...) used to namespace labels when several
+    # datasets train one shared generator. Empty -> falls back to `name`.
+    condition: str = ""
 
 
 @dataclass
@@ -53,6 +56,9 @@ class GeneratorConfig:
     sample_count: int = 100
     sample_steps: int = 30
     guidance: float = 7.5
+    # Policy switch: generator may only train on region-of-interest crops
+    # (VOC sidecar boxes); images without a box are excluded entirely.
+    roi_only: bool = False
 
 
 @dataclass
@@ -133,9 +139,9 @@ def validate(cfg: PipelineConfig) -> None:
             raise ConfigError(f"[generator] {name} must be positive")
     if not (0 < g.lr < 1):
         raise ConfigError("[generator] lr must be in (0, 1)")
-    if g.backend not in ("sd15_lora", "ddpm", "sdxl_lora"):
+    if g.backend not in ("sd15_lora", "ddpm", "sdxl_lora", "mdx"):
         raise ConfigError(
-            f"[generator] unknown backend {g.backend!r} (sd15_lora, ddpm, sdxl_lora)"
+            f"[generator] unknown backend {g.backend!r} (sd15_lora, ddpm, sdxl_lora, mdx)"
         )
     if cfg.dataset.kaggle_slug.count("/") != 1:
         raise ConfigError('[dataset] kaggle_slug must be "owner/dataset-slug"')

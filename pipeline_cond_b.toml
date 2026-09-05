@@ -6,6 +6,7 @@
 name = "folder_class"
 kaggle_slug = "private/local-overlay"
 data_root = ""
+condition = "cond_b"     # study tag for the shared multi-study generator
 
 [splits]
 seed = 20260823
@@ -25,3 +26,4 @@ grad_accum = 1
 sample_count = 100
 sample_steps = 60
 guidance = 1.0
+roi_only = true          # policy: generator trains ONLY on region crops
