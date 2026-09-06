@@ -308,6 +308,10 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
         pipe.fuse_lora()
         pipe.scheduler = LCMScheduler.from_config(pipe.scheduler.config)
     pipe = pipe.to(device)
+    # Sliced attention + VAE keep 512px sampling inside ~4GB VRAM (smallest
+    # target GPU: RTX 2050) at negligible speed cost on larger cards.
+    pipe.enable_attention_slicing()
+    pipe.enable_vae_slicing()
     pipe.set_progress_bar_config(disable=True)
 
     prompt = prompt_for(cls, str(opts.get("prompt", "")) or cfg.generator.prompt_template)

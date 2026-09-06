@@ -34,9 +34,10 @@ dataset_sources = [
     "kmader/skin-cancer-mnist-ham10000",        # skin lesions (modality 1)
     "xiaoweixumedicalai/imagechd",              # pediatric CHD CT (modality 2)
     # sdf-runner-artifacts removed by Kaggle moderation 2026-09-06 (a
-    # published version contained generated face imagery). Do NOT re-add or
-    # recreate with images; checkpoints transfer by retraining in-session
-    # until a weights-only store is agreed.
+    # published version contained generated face imagery). Its replacement
+    # below is weights-only BY CONSTRUCTION: kaggle_runner/artifacts.py
+    # refuses any non-weight file. Never publish imagery to any dataset.
+    "shivpratap0007/sdf-runner-weights",        # checkpoints (mdx/, sd15_lora/ at root)
 ]
 
 [job]

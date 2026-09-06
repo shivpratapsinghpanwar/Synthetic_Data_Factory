@@ -541,9 +541,10 @@ def test_publish_staging_layout(tmp_path):
     from kaggle_runner import artifacts
 
     cfg = config.load()
-    src = tmp_path / "output"
-    (src / "lora" / "df").mkdir(parents=True)
-    (src / "lora" / "df" / "adapter.bin").write_bytes(b"x" * 10)
+    src = tmp_path / "output" / "lora"
+    (src / "sd15_lora" / "df" / "adapter").mkdir(parents=True)
+    (src / "sd15_lora" / "df" / "adapter" / "adapter_model.safetensors").write_bytes(b"x" * 10)
+    (src / "sd15_lora" / "df" / "training_report.json").write_text("{}", encoding="utf-8")
 
     import kaggle_runner.artifacts as art
     original = art.STAGING_DIR
@@ -555,9 +556,11 @@ def test_publish_staging_layout(tmp_path):
 
     meta = _json.loads((folder / "dataset-metadata.json").read_text())
     assert meta["id"] == artifacts.dataset_slug(cfg)
-    assert meta["id"].endswith("-artifacts")
-    # content sits at staging root - one run per dataset version
-    assert (folder / "lora" / "df" / "adapter.bin").exists()
+    assert meta["id"].endswith("-weights")
+    # staged under a single lora/ root; Kaggle strips that lone folder on
+    # extraction, so the served layout starts at the backend directories
+    assert (folder / "lora" / "sd15_lora" / "df" / "adapter"
+            / "adapter_model.safetensors").exists()
 
 
 def test_publish_refuses_missing_source(tmp_path):
@@ -570,17 +573,43 @@ def test_publish_refuses_missing_source(tmp_path):
     raise AssertionError("expected PublishError")
 
 
+def test_publish_refuses_non_weight_files(tmp_path):
+    """The weights dataset must never carry imagery - a polluted checkpoint
+    tree fails the publish outright instead of being silently filtered."""
+    from kaggle_runner import artifacts
+
+    cfg = config.load()
+    src = tmp_path / "output" / "lora"
+    (src / "mdx" / "joint").mkdir(parents=True)
+    (src / "mdx" / "joint" / "weights.pt").write_bytes(b"w")
+    (src / "mdx" / "joint" / "preview.png").write_bytes(b"not-a-weight")
+
+    import kaggle_runner.artifacts as art
+    original = art.STAGING_DIR
+    art.STAGING_DIR = tmp_path / "staging"
+    try:
+        artifacts.stage_folder(cfg, ["runX"], [src])
+    except artifacts.PublishError as exc:
+        assert "preview.png" in str(exc)
+        assert not (tmp_path / "staging").exists() or not any(
+            (tmp_path / "staging").rglob("*.png"))
+        return
+    finally:
+        art.STAGING_DIR = original
+    raise AssertionError("expected PublishError for image in checkpoint tree")
+
+
 def test_publish_merges_multiple_runs(tmp_path):
     from kaggle_runner import artifacts
 
     cfg = config.load()
     a = tmp_path / "a"
-    (a / "synthetic" / "df").mkdir(parents=True)
-    (a / "synthetic" / "df" / "x.png").write_bytes(b"df")
+    (a / "mdx" / "joint").mkdir(parents=True)
+    (a / "mdx" / "joint" / "weights.pt").write_bytes(b"mdx")
     (a / "shared.json").write_text("from-a", encoding="utf-8")
     b = tmp_path / "b"
-    (b / "synthetic" / "vasc").mkdir(parents=True)
-    (b / "synthetic" / "vasc" / "y.png").write_bytes(b"vasc")
+    (b / "sd15_lora" / "df").mkdir(parents=True)
+    (b / "sd15_lora" / "df" / "adapter_model.safetensors").write_bytes(b"sd")
     (b / "shared.json").write_text("from-b", encoding="utf-8")
 
     import kaggle_runner.artifacts as art
@@ -591,39 +620,10 @@ def test_publish_merges_multiple_runs(tmp_path):
     finally:
         art.STAGING_DIR = original
 
-    assert (folder / "synthetic" / "df" / "x.png").exists()
-    assert (folder / "synthetic" / "vasc" / "y.png").exists()
+    assert (folder / "lora" / "mdx" / "joint" / "weights.pt").exists()
+    assert (folder / "lora" / "sd15_lora" / "df" / "adapter_model.safetensors").exists()
     # later run wins on plain collisions
-    assert (folder / "shared.json").read_text(encoding="utf-8") == "from-b"
-
-
-def test_publish_merge_concatenates_manifests_and_keeps_stage_jsons(tmp_path):
-    from kaggle_runner import artifacts
-
-    cfg = config.load()
-    a = tmp_path / "a"
-    a.mkdir()
-    (a / "synthetic_manifest.jsonl").write_text('{"cls": "df"}\n', encoding="utf-8")
-    (a / "stage_quality_gate.json").write_text('{"cls": "df"}', encoding="utf-8")
-    b = tmp_path / "b"
-    b.mkdir()
-    (b / "synthetic_manifest.jsonl").write_text('{"cls": "vasc"}\n', encoding="utf-8")
-    (b / "stage_quality_gate.json").write_text('{"cls": "bcc"}', encoding="utf-8")
-
-    import kaggle_runner.artifacts as art
-    original = art.STAGING_DIR
-    art.STAGING_DIR = tmp_path / "staging"
-    try:
-        folder = artifacts.stage_folder(cfg, ["runA", "runB"], [a, b])
-    finally:
-        art.STAGING_DIR = original
-
-    # manifests concatenate - dropping rows would silently exclude images
-    lines = (folder / "synthetic_manifest.jsonl").read_text(encoding="utf-8").splitlines()
-    assert len(lines) == 2 and "df" in lines[0] and "vasc" in lines[1]
-    # colliding stage jsons are both kept (augment globs stage_quality_gate*)
-    assert (folder / "stage_quality_gate.json").exists()
-    assert (folder / "stage_quality_gate.2.json").exists()
+    assert (folder / "lora" / "shared.json").read_text(encoding="utf-8") == "from-b"
 
 
 # ------------------------------------------------------------------ fallback
