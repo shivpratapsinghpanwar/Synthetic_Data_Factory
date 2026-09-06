@@ -651,6 +651,39 @@ def test_train_stage_rejects_unknown_backend(tmp_path):
     assert "nope" in result.error
 
 
+def test_sd15_sample_defaults_ignore_foreign_backend_config(tmp_path):
+    """When sd15_lora runs as an override arm on an mdx-native config, it must
+    not inherit mdx-tuned guidance/resolution (guidance 1.0 disables CFG and
+    256px is below SD1.5's native resolution)."""
+    from types import SimpleNamespace
+
+    from sdf.gen.sd15_lora import SD15_GUIDANCE_DEFAULT, _sample_defaults
+
+    adapter_dir = tmp_path / "cls" / "adapter"
+    adapter_dir.mkdir(parents=True)
+    mdx_gen = SimpleNamespace(backend="mdx", guidance=1.0, resolution=256)
+    sd_gen = SimpleNamespace(backend="sd15_lora", guidance=7.5, resolution=512)
+
+    # mdx-native config, no report: SD default guidance, config resolution
+    assert _sample_defaults(mdx_gen, {}, adapter_dir) == (SD15_GUIDANCE_DEFAULT, 256)
+
+    # training report is authoritative for resolution
+    (adapter_dir.parent / "training_report.json").write_text(
+        json.dumps({"resolution": 512}), encoding="utf-8")
+    assert _sample_defaults(mdx_gen, {}, adapter_dir) == (SD15_GUIDANCE_DEFAULT, 512)
+
+    # sd15-native config keeps its own guidance
+    assert _sample_defaults(sd_gen, {}, adapter_dir) == (7.5, 512)
+
+    # explicit opts always win
+    assert _sample_defaults(mdx_gen, {"guidance": 3.0, "resolution": 256},
+                            adapter_dir) == (3.0, 256)
+
+    # corrupt report falls back to config resolution
+    (adapter_dir.parent / "training_report.json").write_text("{", encoding="utf-8")
+    assert _sample_defaults(mdx_gen, {}, adapter_dir) == (SD15_GUIDANCE_DEFAULT, 256)
+
+
 # ------------------------------------------------------------------ fallback
 def _run_all():
     import inspect

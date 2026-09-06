@@ -232,6 +232,41 @@ def _ImageDataset(paths, resolution: int):
 
 
 # ------------------------------------------------------------------ sampling
+SD15_GUIDANCE_DEFAULT = 7.5
+
+
+def _sample_defaults(gen, opts: dict, adapter_dir: Path) -> tuple[float, int]:
+    """Resolve (guidance, resolution) for sampling.
+
+    A study config's [generator] numbers are tuned for that study's default
+    backend; when sd15_lora runs as an override arm (--opt backend=), mdx-tuned
+    values are wrong for SD1.5 (guidance 1.0 disables CFG, resolution below
+    native 512 degenerates). Resolution defaults to what the adapter was
+    trained at (its training report); guidance falls back to the config only
+    when the config is sd15-native. Explicit --opt always wins.
+    """
+    report: dict = {}
+    report_path = Path(adapter_dir).parent / "training_report.json"
+    if report_path.exists():
+        try:
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            report = {}
+    if "guidance" in opts:
+        guidance = float(opts["guidance"])
+    elif gen.backend == "sd15_lora":
+        guidance = float(gen.guidance)
+    else:
+        guidance = SD15_GUIDANCE_DEFAULT
+    if "resolution" in opts:
+        resolution = int(opts["resolution"])
+    elif report.get("resolution"):
+        resolution = int(report["resolution"])
+    else:
+        resolution = int(gen.resolution)
+    return guidance, resolution
+
+
 def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[dict]:
     """Generate images from a trained adapter. Returns manifest-ready dicts
     (without file writes to the manifest itself - the stage owns that)."""
@@ -244,8 +279,7 @@ def sample(cfg, cls: str, adapter_dir: Path, out_dir: Path, opts: dict) -> list[
     gen = cfg.generator
     count = int(opts.get("count", gen.sample_count))
     steps = int(opts.get("sample_steps", gen.sample_steps))
-    guidance = float(opts.get("guidance", gen.guidance))
-    resolution = int(opts.get("resolution", gen.resolution))
+    guidance, resolution = _sample_defaults(gen, opts, adapter_dir)
     base_seed = int(opts.get("seed", cfg.splits.seed))
     # LCM-LoRA: training-free inference accelerator (arXiv 2311.05556). Stacks
     # on top of the content LoRA and cuts sampling to 4-8 steps at guidance
